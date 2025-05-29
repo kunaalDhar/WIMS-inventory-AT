@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
@@ -60,6 +59,7 @@ export function AdminLoginDialog({ open, onOpenChange }: AdminLoginDialogProps) 
 
     if (loginSuccess) {
       handleClose()
+      // Immediate redirect without page refresh using Next.js router
       router.push("/admin/dashboard")
     } else {
       setError("Invalid admin credentials. Please check your email and password.")
