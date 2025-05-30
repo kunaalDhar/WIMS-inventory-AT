@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, ShoppingCart, CheckCircle, IndianRupee, Clock, Calculator } from "lucide-react"
+import { Plus, Trash2, ShoppingCart, CheckCircle, IndianRupee, Clock, Calculator, Building2 } from "lucide-react"
 
 interface CreateOrderDialogProps {
   open: boolean
@@ -24,6 +24,7 @@ interface OrderLineItem {
   id: string
   productId: string
   productName: string
+  vendorName: string
   quantity: number
   unitPrice: number
   totalAmount: number
@@ -33,12 +34,12 @@ interface OrderLineItem {
 
 export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps) {
   const { currentUser } = useAuth()
-  const { vendors, availableItems, addOrder } = useOrders()
+  const { availableItems, addOrder } = useOrders()
 
   // Form state
-  const [selectedVendor, setSelectedVendor] = useState("")
   const [selectedProduct, setSelectedProduct] = useState("")
-  const [quantity, setQuantity] = useState("")
+  const [vendorName, setVendorName] = useState("")
+  const [quantity, setQuantity] = useState("1") // Default to 1
   const [unitPrice, setUnitPrice] = useState("")
   const [gstBill, setGstBill] = useState<"yes" | "no">("no")
   const [gstNumber, setGstNumber] = useState("")
@@ -59,7 +60,7 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
 
   // Get current total amount for display
   const getCurrentTotalAmount = () => {
-    const qty = Number.parseFloat(quantity) || 0
+    const qty = Number.parseFloat(quantity) || 1
     const price = Number.parseFloat(unitPrice) || 0
     return calculateTotalAmount(qty, price)
   }
@@ -75,22 +76,26 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
 
   // Validate current line item
   const validateLineItem = () => {
+    // Mandatory fields: product, vendor name, unit price
     if (!selectedProduct) {
       setError("Please select a product")
       return false
     }
-    if (!quantity || Number.parseFloat(quantity) <= 0) {
-      setError("Please enter a valid quantity")
+    if (!vendorName.trim()) {
+      setError("Please enter vendor name")
       return false
     }
     if (!unitPrice || Number.parseFloat(unitPrice) <= 0) {
       setError("Please enter a valid unit price")
       return false
     }
+
+    // Optional validation: if GST Bill is Yes, GST Number is required
     if (gstBill === "yes" && !gstNumber.trim()) {
       setError("Please enter GST number when GST Bill is Yes")
       return false
     }
+
     return true
   }
 
@@ -104,7 +109,7 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
       return
     }
 
-    const qty = Number.parseFloat(quantity)
+    const qty = Number.parseFloat(quantity) || 1
     const price = Number.parseFloat(unitPrice)
     const total = calculateTotalAmount(qty, price)
 
@@ -112,18 +117,19 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
       id: `item-${Date.now()}`,
       productId: selectedProduct,
       productName: product.name,
+      vendorName: vendorName.trim(),
       quantity: qty,
       unitPrice: price,
       totalAmount: total,
       gstBill,
-      gstNumber: gstBill === "yes" ? gstNumber : undefined,
+      gstNumber: gstBill === "yes" ? gstNumber.trim() : undefined,
     }
 
     setOrderItems((prev) => [...prev, newItem])
 
-    // Reset form
+    // Reset form (keep vendor name for convenience)
     setSelectedProduct("")
-    setQuantity("")
+    setQuantity("1")
     setUnitPrice("")
     setGstBill("no")
     setGstNumber("")
@@ -147,10 +153,6 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
 
   // Validate complete order
   const validateOrder = () => {
-    if (!selectedVendor) {
-      setError("Please select a vendor")
-      return false
-    }
     if (orderItems.length === 0) {
       setError("Please add at least one item to the order")
       return false
@@ -167,13 +169,6 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
     setError("")
 
     try {
-      const vendor = vendors.find((v) => v.id === selectedVendor)
-      if (!vendor) {
-        setError("Selected vendor not found")
-        setIsPlacingOrder(false)
-        return
-      }
-
       const orderId = `ORD-${Date.now()}`
       const totals = getOrderTotals()
 
@@ -184,6 +179,7 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
           ...product,
           requestedQuantity: item.quantity,
           salesmanPrice: item.unitPrice,
+          vendorName: item.vendorName,
           gstBill: item.gstBill,
           gstNumber: item.gstNumber,
         }
@@ -192,8 +188,8 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
       const newOrder = {
         salesmanId: currentUser.id,
         salesmanName: currentUser.name,
-        vendorId: vendor.id,
-        vendorName: vendor.name,
+        vendorId: `vendor-${Date.now()}`, // Generate vendor ID
+        vendorName: orderItems[0].vendorName, // Use vendor name from first item
         items: orderItemsFormatted,
         status: "pending" as const,
         totalItems: totals.totalQuantity,
@@ -231,9 +227,9 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
 
   // Reset form
   const handleResetForm = () => {
-    setSelectedVendor("")
     setSelectedProduct("")
-    setQuantity("")
+    setVendorName("")
+    setQuantity("1")
     setUnitPrice("")
     setGstBill("no")
     setGstNumber("")
@@ -254,17 +250,16 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
     onOpenChange(open)
   }
 
-  // Check if current line item can be added
+  // Check if current line item can be added (mandatory fields only)
   const canAddItem =
     selectedProduct &&
-    quantity &&
+    vendorName.trim() &&
     unitPrice &&
-    Number.parseFloat(quantity) > 0 &&
     Number.parseFloat(unitPrice) > 0 &&
     (gstBill === "no" || (gstBill === "yes" && gstNumber.trim()))
 
   // Check if order can be placed
-  const canPlaceOrder = selectedVendor && orderItems.length > 0 && !isPlacingOrder && !orderPlaced
+  const canPlaceOrder = orderItems.length > 0 && !isPlacingOrder && !orderPlaced
 
   // Success state UI
   if (orderPlaced) {
@@ -338,38 +333,18 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
             <span>Create New Order</span>
           </DialogTitle>
           <DialogDescription>
-            Select vendor and add products with pricing details. Admin will set official pricing after submission.
+            Add products with pricing details. Admin will set official pricing after submission.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Vendor Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="vendor">Select Vendor *</Label>
-            <Select value={selectedVendor} onValueChange={setSelectedVendor} disabled={isPlacingOrder}>
-              <SelectTrigger>
-                <SelectValue placeholder="Choose a vendor" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendors.map((vendor) => (
-                  <SelectItem key={vendor.id} value={vendor.id}>
-                    {vendor.name} - {vendor.contactPerson}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {vendors.length === 0 && (
-              <p className="text-sm text-muted-foreground">No vendors available. Please create a vendor first.</p>
-            )}
-          </div>
-
           {/* Add Item Section */}
           <div className="space-y-4">
             <Label className="text-lg font-semibold">Add Items to Order</Label>
 
             <div className="p-4 border rounded-lg bg-muted/20 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Product Selection */}
+                {/* Product Selection - MANDATORY */}
                 <div className="space-y-2">
                   <Label htmlFor="product">Product *</Label>
                   <Select value={selectedProduct} onValueChange={setSelectedProduct} disabled={isPlacingOrder}>
@@ -386,22 +361,23 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
                   </Select>
                 </div>
 
-                {/* Quantity */}
+                {/* Vendor Name - MANDATORY */}
                 <div className="space-y-2">
-                  <Label htmlFor="quantity">Qty *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="Enter quantity"
-                    min="1"
-                    step="1"
-                    disabled={isPlacingOrder}
-                  />
+                  <Label htmlFor="vendorName">Vendor Name *</Label>
+                  <div className="flex items-center space-x-1">
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <Input
+                      id="vendorName"
+                      type="text"
+                      value={vendorName}
+                      onChange={(e) => setVendorName(e.target.value)}
+                      placeholder="Enter vendor name"
+                      disabled={isPlacingOrder}
+                    />
+                  </div>
                 </div>
 
-                {/* Unit Price */}
+                {/* Unit Price - MANDATORY */}
                 <div className="space-y-2">
                   <Label htmlFor="unitPrice">Unit Price (Inclusive GST) *</Label>
                   <div className="flex items-center space-x-1">
@@ -418,24 +394,43 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
                     />
                   </div>
                 </div>
+
+                {/* Quantity - OPTIONAL (defaults to 1) */}
+                <div className="space-y-2">
+                  <Label htmlFor="quantity">Quantity (Optional)</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    placeholder="1"
+                    min="1"
+                    step="1"
+                    disabled={isPlacingOrder}
+                  />
+                  <p className="text-xs text-muted-foreground">Defaults to 1 if not specified</p>
+                </div>
               </div>
 
-              {/* Total Amount Display */}
-              {quantity && unitPrice && (
+              {/* Total Amount Display - Real-time calculation */}
+              {unitPrice && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <Calculator className="w-4 h-4 text-green-600" />
                       <span className="font-medium">Total Amount:</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({quantity || 1} × ₹{unitPrice})
+                      </span>
                     </div>
                     <span className="text-lg font-bold text-green-600">{formatCurrency(getCurrentTotalAmount())}</span>
                   </div>
                 </div>
               )}
 
-              {/* GST Bill Section */}
+              {/* GST Bill Section - OPTIONAL */}
               <div className="space-y-3">
-                <Label>GST Bill *</Label>
+                <Label>GST Bill (Optional)</Label>
                 <RadioGroup value={gstBill} onValueChange={(value: "yes" | "no") => setGstBill(value)}>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="yes" id="gst-yes" />
@@ -447,7 +442,7 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
                   </div>
                 </RadioGroup>
 
-                {/* GST Number (conditional) */}
+                {/* GST Number (conditional) - OPTIONAL unless GST Bill = Yes */}
                 {gstBill === "yes" && (
                   <div className="space-y-2">
                     <Label htmlFor="gstNumber">GST Number *</Label>
@@ -458,8 +453,22 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
                       placeholder="Enter GST number"
                       disabled={isPlacingOrder}
                     />
+                    <p className="text-xs text-muted-foreground">Required when GST Bill is Yes</p>
                   </div>
                 )}
+              </div>
+
+              {/* Field Requirements Info */}
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-sm">
+                  <p className="font-medium text-blue-800 mb-1">Field Requirements:</p>
+                  <p className="text-blue-700">
+                    <strong>Mandatory:</strong> Product, Vendor Name, Unit Price
+                  </p>
+                  <p className="text-blue-700">
+                    <strong>Optional:</strong> Quantity (defaults to 1), GST Bill, GST Number
+                  </p>
+                </div>
               </div>
 
               {/* Add Item Button */}
@@ -486,6 +495,7 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
                     <TableRow className="bg-muted/50">
                       <TableHead>S.No.</TableHead>
                       <TableHead>Product</TableHead>
+                      <TableHead>Vendor</TableHead>
                       <TableHead>Qty</TableHead>
                       <TableHead>Unit Price (₹)</TableHead>
                       <TableHead>Total Amount (₹)</TableHead>
@@ -499,6 +509,7 @@ export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps
                       <TableRow key={item.id}>
                         <TableCell className="font-medium">{index + 1}</TableCell>
                         <TableCell>{item.productName}</TableCell>
+                        <TableCell>{item.vendorName}</TableCell>
                         <TableCell>{item.quantity}</TableCell>
                         <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
                         <TableCell className="font-medium text-green-600">{formatCurrency(item.totalAmount)}</TableCell>

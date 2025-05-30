@@ -44,22 +44,13 @@ export function CreateVendorDialog({ open, onOpenChange }: CreateVendorDialogPro
       setError("Vendor name is required")
       return false
     }
-    if (!formData.email.trim()) {
-      setError("Email is required")
-      return false
-    }
-    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+
+    // Only validate email format if an email is provided
+    if (formData.email.trim() && !/\S+@\S+\.\S+/.test(formData.email)) {
       setError("Please enter a valid email")
       return false
     }
-    if (!formData.phone.trim()) {
-      setError("Phone number is required")
-      return false
-    }
-    if (!formData.contactPerson.trim()) {
-      setError("Contact person is required")
-      return false
-    }
+
     return true
   }
 
@@ -92,7 +83,7 @@ export function CreateVendorDialog({ open, onOpenChange }: CreateVendorDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <Users className="w-5 h-5" />
@@ -102,86 +93,90 @@ export function CreateVendorDialog({ open, onOpenChange }: CreateVendorDialogPro
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Vendor Name *</Label>
-            <Input
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              placeholder="Enter vendor company name"
-              required
-            />
+          <div className="space-y-4 pb-4">
+            <div className="text-sm text-muted-foreground mb-4">Fields marked with * are required</div>
+            <div className="space-y-2">
+              <Label htmlFor="name">Vendor Name *</Label>
+              <Input
+                id="name"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="Enter vendor company name"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="contactPerson">Contact Person</Label>
+              <Input
+                id="contactPerson"
+                name="contactPerson"
+                value={formData.contactPerson}
+                onChange={handleInputChange}
+                placeholder="Enter contact person name (optional)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleInputChange}
+                placeholder="Enter email address (optional)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={handleInputChange}
+                placeholder="Enter phone number (optional)"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Address</Label>
+              <Textarea
+                id="address"
+                name="address"
+                value={formData.address}
+                onChange={handleInputChange}
+                placeholder="Enter vendor address"
+                rows={3}
+              />
+            </div>
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {success && (
+              <Alert>
+                <AlertDescription>{success}</AlertDescription>
+              </Alert>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="contactPerson">Contact Person *</Label>
-            <Input
-              id="contactPerson"
-              name="contactPerson"
-              value={formData.contactPerson}
-              onChange={handleInputChange}
-              placeholder="Enter contact person name"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="email">Email Address *</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              placeholder="Enter email address"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="phone">Phone Number *</Label>
-            <Input
-              id="phone"
-              name="phone"
-              type="tel"
-              value={formData.phone}
-              onChange={handleInputChange}
-              placeholder="Enter phone number"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="address">Address</Label>
-            <Textarea
-              id="address"
-              name="address"
-              value={formData.address}
-              onChange={handleInputChange}
-              placeholder="Enter vendor address"
-              rows={3}
-            />
-          </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {success && (
-            <Alert>
-              <AlertDescription>{success}</AlertDescription>
-            </Alert>
-          )}
-
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <div className="flex justify-end space-x-2 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="min-w-[80px]">
               Cancel
             </Button>
-            <Button type="submit" className="bg-green-600 hover:bg-green-700">
-              Create Vendor
+            <Button
+              type="submit"
+              disabled={!formData.name.trim()}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed min-w-[80px]"
+            >
+              Save Vendor
             </Button>
           </div>
         </form>
