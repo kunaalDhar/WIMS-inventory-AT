@@ -54,7 +54,7 @@ interface OrderItem {
 
 interface Order {
   id: string
-  orderNumber?: number
+  orderNumber?: string
   salesmanId: string
   salesmanName: string
   clientId: string
@@ -98,6 +98,7 @@ interface Order {
 
 export function OrderPricingPanel() {
   const { orders, bills, setAdminPricing, approveOrder, rejectOrder, updateOrderStatus } = useOrders()
+  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | null }>({ message: "", type: null })
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
@@ -106,6 +107,7 @@ export function OrderPricingPanel() {
   const [adminNotes, setAdminNotes] = useState("")
   const [allowPriceAdjustment, setAllowPriceAdjustment] = useState(false)
   const [recentActivity, setRecentActivity] = useState<string[]>([])
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null)
 
   // Real-time activity monitoring
   useEffect(() => {
@@ -200,14 +202,33 @@ export function OrderPricingPanel() {
     setSelectedOrder(null)
   }
 
-  const handleApproveOrder = (orderId: string) => {
-    approveOrder(orderId)
+  const handleApproveOrder = async (orderId: string) => {
+    setLoadingOrderId(orderId)
+    try {
+      await approveOrder(orderId)
+      setNotification({ message: `Order #${orderId} has been approved successfully.`, type: "success" })
+      setTimeout(() => setNotification({ message: "", type: null }), 3000)
+    } catch (error) {
+      setNotification({ message: `Failed to approve order #${orderId}. Please try again.`, type: "error" })
+      setTimeout(() => setNotification({ message: "", type: null }), 3000)
+    } finally {
+      setLoadingOrderId(null)
+    }
   }
 
-  const handleRejectOrder = (orderId: string) => {
+  const handleRejectOrder = async (orderId: string) => {
     const reason = prompt("Please provide a reason for rejection:")
-    if (reason) {
-      rejectOrder(orderId, reason)
+    if (!reason) return
+    setLoadingOrderId(orderId)
+    try {
+      await rejectOrder(orderId, reason)
+      setNotification({ message: `Order #${orderId} has been rejected.`, type: "success" })
+      setTimeout(() => setNotification({ message: "", type: null }), 3000)
+    } catch (error) {
+      setNotification({ message: `Failed to reject order #${orderId}. Please try again.`, type: "error" })
+      setTimeout(() => setNotification({ message: "", type: null }), 3000)
+    } finally {
+      setLoadingOrderId(null)
     }
   }
 
@@ -487,9 +508,14 @@ export function OrderPricingPanel() {
   }
 
   // Sort orders by order number (sequential)
+  const extractOrderNum = (orderNumber?: string) => {
+    if (!orderNumber) return 0
+    const match = orderNumber.match(/\d+/)
+    return match ? parseInt(match[0], 10) : 0
+  }
   const sortedOrders = [...orders].sort((a, b) => {
-    const aNum = a.orderNumber || 0
-    const bNum = b.orderNumber || 0
+    const aNum = extractOrderNum(a.orderNumber)
+    const bNum = extractOrderNum(b.orderNumber)
     return bNum - aNum // Most recent first
   })
 
@@ -742,7 +768,7 @@ export function OrderPricingPanel() {
                     <TableRow key={order.id} className={isRecentlyModified ? "bg-blue-50" : ""}>
                       <TableCell className="font-bold text-blue-600">
                         <div className="flex items-center gap-2">
-                          #{String(order.orderNumber || 0).padStart(4, "0")}
+                          {order.orderNumber ? order.orderNumber : "N/A"}
                           {isRecentlyModified && <Zap className="w-3 h-3 text-blue-500" />}
                         </div>
                       </TableCell>
@@ -792,18 +818,29 @@ export function OrderPricingPanel() {
                               <RotateCcw className="w-4 h-4" />
                             </Button>
                           )}
+                          {/* Approve/Reject for pending orders */}
+                          {order.status === "pending" && (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => handleApproveOrder(order.id)} disabled={loadingOrderId === order.id}>
+                                {loadingOrderId === order.id ? "Approving..." : <CheckCircle className="w-4 h-4" />}
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => handleRejectOrder(order.id)} disabled={loadingOrderId === order.id}>
+                                {loadingOrderId === order.id ? "Rejecting..." : <AlertTriangle className="w-4 h-4" />}
+                              </Button>
+                            </>
+                          )}
                           {order.status === "admin_priced" && (
-                            <Button variant="ghost" size="sm" onClick={() => handleApproveOrder(order.id)}>
-                              <CheckCircle className="w-4 h-4" />
+                            <Button variant="ghost" size="sm" onClick={() => handleApproveOrder(order.id)} disabled={loadingOrderId === order.id}>
+                              {loadingOrderId === order.id ? "Approving..." : <CheckCircle className="w-4 h-4" />}
                             </Button>
                           )}
                           {order.status === "salesman_adjusted" && (
                             <>
-                              <Button variant="ghost" size="sm" onClick={() => handleApproveOrder(order.id)}>
-                                <CheckCircle className="w-4 h-4" />
+                              <Button variant="ghost" size="sm" onClick={() => handleApproveOrder(order.id)} disabled={loadingOrderId === order.id}>
+                                {loadingOrderId === order.id ? "Approving..." : <CheckCircle className="w-4 h-4" />}
                               </Button>
-                              <Button variant="ghost" size="sm" onClick={() => handleRejectOrder(order.id)}>
-                                <AlertTriangle className="w-4 h-4" />
+                              <Button variant="ghost" size="sm" onClick={() => handleRejectOrder(order.id)} disabled={loadingOrderId === order.id}>
+                                {loadingOrderId === order.id ? "Rejecting..." : <AlertTriangle className="w-4 h-4" />}
                               </Button>
                             </>
                           )}
@@ -867,7 +904,7 @@ export function OrderPricingPanel() {
               <div className="grid grid-cols-4 gap-4 p-4 bg-muted/50 rounded-lg">
                 <div>
                   <Label className="text-sm font-medium">Order Number</Label>
-                  <p className="text-sm font-bold">#{String(selectedOrder.orderNumber || 0).padStart(4, "0")}</p>
+                  <p className="text-sm font-bold">{selectedOrder.orderNumber ? selectedOrder.orderNumber : "N/A"}</p>
                 </div>
                 <div>
                   <Label className="text-sm font-medium">Salesman</Label>
@@ -1038,6 +1075,12 @@ export function OrderPricingPanel() {
           )}
         </DialogContent>
       </Dialog>
+
+      {notification.message && (
+        <Alert variant={notification.type === "success" ? "default" : "destructive"} className="mb-4">
+          <AlertDescription>{notification.message}</AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }
