@@ -69,6 +69,7 @@ interface InventoryContextType {
   transfers: StockTransfer[]
   movements: StockMovement[]
   alerts: InventoryAlert[]
+  isDataLoaded: boolean
   updateStock: (itemId: string, quantity: number, reason: string, type: "in" | "out") => void
   createTransfer: (transfer: Omit<StockTransfer, "id" | "createdAt">) => void
   updateTransferStatus: (transferId: string, status: StockTransfer["status"], notes?: string) => void
@@ -82,12 +83,51 @@ interface InventoryContextType {
     pendingTransfers: number
   }
   refreshInventory: () => void
+  clearInventoryData: () => void
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined)
 
+// Storage keys for inventory data
+const INVENTORY_STORAGE_KEYS = {
+  INVENTORY: "wims-inventory-v2",
+  TRANSFERS: "wims-transfers-v2",
+  MOVEMENTS: "wims-movements-v2",
+  ALERTS: "wims-alerts-v2",
+  LAST_SYNC: "wims-inventory-last-sync-v2",
+} as const
+
+// Utility functions for safe localStorage operations
+const safeGet = (key: string, defaultValue: any = []) => {
+  try {
+    if (typeof window === "undefined") return defaultValue
+    const item = localStorage.getItem(key)
+    return item ? JSON.parse(item) : defaultValue
+  } catch (error) {
+    console.error(`Error reading inventory data from localStorage key "${key}":`, error)
+    return defaultValue
+  }
+}
+
+const safeSet = (key: string, value: any) => {
+  try {
+    if (typeof window === "undefined") return
+    localStorage.setItem(key, JSON.stringify(value))
+    localStorage.setItem(INVENTORY_STORAGE_KEYS.LAST_SYNC, new Date().toISOString())
+  } catch (error) {
+    console.error(`Error writing inventory data to localStorage key "${key}":`, error)
+  }
+}
+
 export function InventoryProvider({ children }: { children: React.ReactNode }) {
-  const [inventory, setInventory] = useState<InventoryItem[]>([
+  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [transfers, setTransfers] = useState<StockTransfer[]>([])
+  const [movements, setMovements] = useState<StockMovement[]>([])
+  const [alerts, setAlerts] = useState<InventoryAlert[]>([])
+  const [isDataLoaded, setIsDataLoaded] = useState(false)
+
+  // Default inventory data
+  const defaultInventory: InventoryItem[] = [
     {
       id: "1",
       name: "Litchi",
@@ -183,166 +223,98 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       lastOrderDate: "2024-01-14",
       expiryDate: "2024-05-30",
     },
-  ])
+  ]
 
-  const [transfers, setTransfers] = useState<StockTransfer[]>([
-    {
-      id: "T001",
-      itemId: "1",
-      itemName: "Litchi",
-      fromLocation: "Warehouse A",
-      toLocation: "Store B",
-      quantity: 5,
-      status: "completed",
-      requestedBy: "John Doe",
-      approvedBy: "Admin",
-      createdAt: "2024-01-15T10:00:00Z",
-      completedAt: "2024-01-15T14:30:00Z",
-      transferType: "warehouse-to-store",
-      notes: "Regular stock replenishment",
-    },
-    {
-      id: "T002",
-      itemId: "4",
-      itemName: "Mix Fruit",
-      fromLocation: "Store C",
-      toLocation: "Warehouse A",
-      quantity: 10,
-      status: "in-transit",
-      requestedBy: "Jane Smith",
-      createdAt: "2024-01-14T09:15:00Z",
-      transferType: "store-to-warehouse",
-      notes: "Return excess stock",
-    },
-    {
-      id: "T003",
-      itemId: "5",
-      itemName: "Orange",
-      fromLocation: "Warehouse A",
-      toLocation: "Store D",
-      quantity: 8,
-      status: "pending",
-      requestedBy: "Mike Johnson",
-      createdAt: "2024-01-13T16:45:00Z",
-      transferType: "warehouse-to-store",
-      notes: "Urgent store requirement",
-    },
-  ])
-
-  const [movements, setMovements] = useState<StockMovement[]>([
-    {
-      id: "M001",
-      itemId: "1",
-      itemName: "Litchi",
-      type: "out",
-      quantity: 5,
-      reason: "Transfer to Store B",
-      location: "Warehouse A",
-      performedBy: "Admin",
-      timestamp: "2024-01-15T14:30:00Z",
-      transferId: "T001",
-    },
-    {
-      id: "M002",
-      itemId: "2",
-      itemName: "Mango",
-      type: "out",
-      quantity: 7,
-      reason: "Customer Order",
-      location: "Warehouse A",
-      performedBy: "System",
-      timestamp: "2024-01-14T11:20:00Z",
-      orderId: "ORD-123",
-    },
-  ])
-
-  const [alerts, setAlerts] = useState<InventoryAlert[]>([
-    {
-      id: "A001",
-      type: "low-stock",
-      itemId: "2",
-      itemName: "Mango",
-      message: "Mango stock is below minimum threshold (8/15)",
-      severity: "medium",
-      createdAt: new Date().toISOString(),
-      acknowledged: false,
-    },
-    {
-      id: "A002",
-      type: "out-of-stock",
-      itemId: "3",
-      itemName: "Guava",
-      message: "Guava is completely out of stock",
-      severity: "critical",
-      createdAt: new Date().toISOString(),
-      acknowledged: false,
-    },
-    {
-      id: "A003",
-      type: "expiry-warning",
-      itemId: "5",
-      itemName: "Orange",
-      message: "Orange stock expires in 30 days",
-      severity: "low",
-      createdAt: new Date().toISOString(),
-      acknowledged: false,
-    },
-  ])
-
-  // Load data from localStorage on mount
+  // Initialize data from localStorage on mount
   useEffect(() => {
-    const savedInventory = localStorage.getItem("wims-inventory")
-    const savedTransfers = localStorage.getItem("wims-transfers")
-    const savedMovements = localStorage.getItem("wims-movements")
-    const savedAlerts = localStorage.getItem("wims-alerts")
+    const initializeInventoryData = () => {
+      try {
+        console.log("🔄 Initializing inventory data from localStorage...")
 
-    if (savedInventory) setInventory(JSON.parse(savedInventory))
-    if (savedTransfers) setTransfers(JSON.parse(savedTransfers))
-    if (savedMovements) setMovements(JSON.parse(savedMovements))
-    if (savedAlerts) setAlerts(JSON.parse(savedAlerts))
+        const savedInventory = safeGet(INVENTORY_STORAGE_KEYS.INVENTORY, defaultInventory)
+        const savedTransfers = safeGet(INVENTORY_STORAGE_KEYS.TRANSFERS, [])
+        const savedMovements = safeGet(INVENTORY_STORAGE_KEYS.MOVEMENTS, [])
+        const savedAlerts = safeGet(INVENTORY_STORAGE_KEYS.ALERTS, [])
+
+        // Validate and set data
+        setInventory(Array.isArray(savedInventory) ? savedInventory : defaultInventory)
+        setTransfers(Array.isArray(savedTransfers) ? savedTransfers : [])
+        setMovements(Array.isArray(savedMovements) ? savedMovements : [])
+        setAlerts(Array.isArray(savedAlerts) ? savedAlerts : [])
+
+        console.log(`✅ Loaded inventory data:`)
+        console.log(`  - ${savedInventory.length} inventory items`)
+        console.log(`  - ${savedTransfers.length} transfers`)
+        console.log(`  - ${savedMovements.length} movements`)
+        console.log(`  - ${savedAlerts.length} alerts`)
+
+        setIsDataLoaded(true)
+      } catch (error) {
+        console.error("❌ Error initializing inventory data:", error)
+        // Fallback to default data
+        setInventory(defaultInventory)
+        setIsDataLoaded(true)
+      }
+    }
+
+    const timer = setTimeout(initializeInventoryData, 100)
+    return () => clearTimeout(timer)
   }, [])
 
-  // Save to localStorage whenever data changes
+  // Auto-save inventory data to localStorage
   useEffect(() => {
-    localStorage.setItem("wims-inventory", JSON.stringify(inventory))
-  }, [inventory])
+    if (isDataLoaded) {
+      console.log("💾 Auto-saving inventory to localStorage")
+      safeSet(INVENTORY_STORAGE_KEYS.INVENTORY, inventory)
+    }
+  }, [inventory, isDataLoaded])
 
   useEffect(() => {
-    localStorage.setItem("wims-transfers", JSON.stringify(transfers))
-  }, [transfers])
+    if (isDataLoaded) {
+      safeSet(INVENTORY_STORAGE_KEYS.TRANSFERS, transfers)
+    }
+  }, [transfers, isDataLoaded])
 
   useEffect(() => {
-    localStorage.setItem("wims-movements", JSON.stringify(movements))
-  }, [movements])
+    if (isDataLoaded) {
+      safeSet(INVENTORY_STORAGE_KEYS.MOVEMENTS, movements)
+    }
+  }, [movements, isDataLoaded])
 
   useEffect(() => {
-    localStorage.setItem("wims-alerts", JSON.stringify(alerts))
-  }, [alerts])
+    if (isDataLoaded) {
+      safeSet(INVENTORY_STORAGE_KEYS.ALERTS, alerts)
+    }
+  }, [alerts, isDataLoaded])
 
   // Update stock status based on current stock levels
   useEffect(() => {
-    setInventory((prev) =>
-      prev.map((item) => {
-        let status: InventoryItem["status"] = "in-stock"
-        if (item.currentStock === 0) {
-          status = "out-of-stock"
-        } else if (item.currentStock <= item.minStock) {
-          status = "low-stock"
-        } else if (item.currentStock >= item.maxStock) {
-          status = "overstocked"
-        }
+    if (isDataLoaded) {
+      setInventory((prev) =>
+        prev.map((item) => {
+          let status: InventoryItem["status"] = "in-stock"
+          if (item.currentStock === 0) {
+            status = "out-of-stock"
+          } else if (item.currentStock <= item.minStock) {
+            status = "low-stock"
+          } else if (item.currentStock >= item.maxStock) {
+            status = "overstocked"
+          }
 
-        return {
-          ...item,
-          status,
-          totalValue: item.currentStock * item.unitCost,
-          lastUpdated: new Date().toISOString(),
-        }
-      }),
-    )
-  }, [])
+          return {
+            ...item,
+            status,
+            totalValue: item.currentStock * item.unitCost,
+            lastUpdated: new Date().toISOString(),
+          }
+        }),
+      )
+    }
+  }, [isDataLoaded])
 
   const updateStock = (itemId: string, quantity: number, reason: string, type: "in" | "out") => {
+    console.log(`📦 Updating stock for item ${itemId}: ${type} ${quantity} units`)
+
     setInventory((prev) =>
       prev.map((item) => {
         if (item.id === itemId) {
@@ -378,10 +350,13 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       id: `T${Date.now()}`,
       createdAt: new Date().toISOString(),
     }
+    console.log("🚚 Creating new transfer:", newTransfer.id)
     setTransfers((prev) => [newTransfer, ...prev])
   }
 
   const updateTransferStatus = (transferId: string, status: StockTransfer["status"], notes?: string) => {
+    console.log(`📝 Updating transfer ${transferId} status to ${status}`)
+
     setTransfers((prev) =>
       prev.map((transfer) => {
         if (transfer.id === transferId) {
@@ -409,6 +384,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   }
 
   const acknowledgeAlert = (alertId: string) => {
+    console.log("✅ Acknowledging alert:", alertId)
     setAlerts((prev) => prev.map((alert) => (alert.id === alertId ? { ...alert, acknowledged: true } : alert)))
   }
 
@@ -431,8 +407,33 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   }
 
   const refreshInventory = () => {
-    // Force refresh of inventory data
-    setInventory((prev) => [...prev])
+    console.log("🔄 Manually refreshing inventory data...")
+    const savedInventory = safeGet(INVENTORY_STORAGE_KEYS.INVENTORY, defaultInventory)
+    const savedTransfers = safeGet(INVENTORY_STORAGE_KEYS.TRANSFERS, [])
+    const savedMovements = safeGet(INVENTORY_STORAGE_KEYS.MOVEMENTS, [])
+    const savedAlerts = safeGet(INVENTORY_STORAGE_KEYS.ALERTS, [])
+
+    setInventory(savedInventory)
+    setTransfers(savedTransfers)
+    setMovements(savedMovements)
+    setAlerts(savedAlerts)
+  }
+
+  const clearInventoryData = () => {
+    console.log("🗑️ Clearing all inventory data...")
+    setInventory(defaultInventory)
+    setTransfers([])
+    setMovements([])
+    setAlerts([])
+
+    // Clear localStorage
+    Object.values(INVENTORY_STORAGE_KEYS).forEach((key) => {
+      try {
+        localStorage.removeItem(key)
+      } catch (error) {
+        console.error(`Error clearing inventory localStorage key "${key}":`, error)
+      }
+    })
   }
 
   return (
@@ -442,12 +443,14 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         transfers,
         movements,
         alerts,
+        isDataLoaded,
         updateStock,
         createTransfer,
         updateTransferStatus,
         acknowledgeAlert,
         getInventorySummary,
         refreshInventory,
+        clearInventoryData,
       }}
     >
       {children}

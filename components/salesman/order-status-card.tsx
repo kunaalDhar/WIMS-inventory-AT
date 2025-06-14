@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +9,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useOrders } from "@/contexts/order-context"
-import { Eye, Clock, CheckCircle, XCircle, DollarSign, Edit, Download, AlertTriangle } from "lucide-react"
+import { Clock, CheckCircle, AlertTriangle, DollarSign, FileText, Edit } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
+import { useState } from "react"
 
 interface OrderItem {
   id: string
@@ -62,6 +63,10 @@ interface Order {
     itemPrices: Record<string, number>
     adjustments: Record<string, number>
   }
+  orderNumber: string
+  clientName: string
+  withGst: boolean
+  isEditable: boolean
 }
 
 interface OrderStatusCardProps {
@@ -75,26 +80,22 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
   const [adjustmentNotes, setAdjustmentNotes] = useState("")
   const [error, setError] = useState("")
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
+  const getStatusIcon = () => {
+    switch (order.status) {
       case "pending":
-        return <Clock className="w-4 h-4 text-yellow-600" />
+        return <Clock className="w-5 h-5 text-yellow-600" />
       case "admin_priced":
-        return <DollarSign className="w-4 h-4 text-blue-600" />
-      case "salesman_adjusted":
-        return <Edit className="w-4 h-4 text-purple-600" />
+        return <DollarSign className="w-5 h-5 text-blue-600" />
       case "approved":
-        return <CheckCircle className="w-4 h-4 text-green-600" />
+        return <CheckCircle className="w-5 h-5 text-green-600" />
       case "rejected":
-        return <XCircle className="w-4 h-4 text-red-600" />
-      case "completed":
-        return <CheckCircle className="w-4 h-4 text-green-600" />
+        return <AlertTriangle className="w-5 h-5 text-red-600" />
       default:
-        return <Clock className="w-4 h-4 text-gray-600" />
+        return <Clock className="w-5 h-5 text-gray-600" />
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = () => {
     const variants = {
       pending: "secondary",
       admin_priced: "default",
@@ -105,8 +106,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     } as const
 
     const labels = {
-      pending: "PENDING PRICING",
-      admin_priced: "ADMIN PRICED",
+      pending: "PENDING",
+      admin_priced: "PRICED",
       salesman_adjusted: "ADJUSTED",
       approved: "APPROVED",
       rejected: "REJECTED",
@@ -114,8 +115,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     }
 
     return (
-      <Badge variant={variants[status as keyof typeof variants] || "default"}>
-        {labels[status as keyof typeof labels] || status.toUpperCase()}
+      <Badge variant={variants[order.status as keyof typeof variants] || "default"}>
+        {labels[order.status as keyof typeof labels] || order.status.toUpperCase()}
       </Badge>
     )
   }
@@ -354,82 +355,58 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
     }).format(amount)
   }
 
-  const currentPricing = order.finalPricing || order.adminPricing
+  const currentPricing = order.finalPricing || order.adminPricing || order.salesmanPricing
+  const createdAt = new Date(order.createdAt)
 
   return (
     <>
-      <Card className="hover:shadow-md transition-shadow">
+      <Card className="overflow-hidden">
+        <div
+          className={`h-2 ${order.status === "approved" ? "bg-green-500" : order.status === "rejected" ? "bg-red-500" : "bg-blue-500"}`}
+        ></div>
         <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-2">
-              {getStatusIcon(order.status)}
-              <h4 className="font-medium">{order.id}</h4>
+          <div className="flex justify-between items-start mb-3">
+            <div>
+              <h3 className="font-bold text-lg">{order.orderNumber}</h3>
+              <p className="text-sm text-muted-foreground">{order.clientName}</p>
             </div>
-            {getStatusBadge(order.status)}
+            <div className="flex items-center space-x-2">
+              {getStatusIcon()}
+              {getStatusBadge()}
+            </div>
           </div>
 
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <div className="flex justify-between">
-              <span>Vendor:</span>
-              <span className="font-medium">{order.vendorName}</span>
-            </div>
+          <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span>Items:</span>
-              <span>
-                {order.totalItems} cases ({order.items.length} types)
-              </span>
+              <span>{order.items.length} types</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Total:</span>
+              <span className="font-medium">{currentPricing ? formatCurrency(currentPricing.total) : "Pending"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>GST:</span>
+              <span>{order.withGst ? "Included (12%)" : "Not Applied"}</span>
             </div>
             <div className="flex justify-between">
               <span>Created:</span>
-              <span>{new Date(order.createdAt).toLocaleDateString()}</span>
-            </div>
-            {order.salesmanPricing && (
-              <div className="flex justify-between">
-                <span>Your Price:</span>
-                <span className="font-medium text-yellow-600">₹{order.salesmanPricing.total.toFixed(2)}</span>
-              </div>
-            )}
-            {currentPricing && (
-              <div className="flex justify-between">
-                <span>Official Price:</span>
-                <span className="font-medium text-green-600">₹{currentPricing.total.toFixed(2)}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-3 p-2 bg-muted/50 rounded text-xs">
-            <p className="text-muted-foreground">{getStatusMessage(order.status)}</p>
-            {order.adminNotes && <p className="text-xs text-blue-600 mt-1">Admin: {order.adminNotes}</p>}
-            {order.salesmanAdjustmentNotes && (
-              <p className="text-xs text-purple-600 mt-1">Your adjustment: {order.salesmanAdjustmentNotes}</p>
-            )}
-          </div>
-
-          <div className="flex justify-between items-center mt-3">
-            <div className="text-xs text-muted-foreground">
-              {order.items
-                .slice(0, 2)
-                .map((item) => item.name)
-                .join(", ")}
-              {order.items.length > 2 && ` +${order.items.length - 2} more`}
-            </div>
-            <div className="flex items-center space-x-2">
-              {order.allowPriceAdjustment && order.status === "admin_priced" && (
-                <Button variant="ghost" size="sm" onClick={handleAdjustPrices}>
-                  <Edit className="w-4 h-4" />
-                </Button>
-              )}
-              {canGenerateInvoice && (
-                <Button variant="ghost" size="sm" onClick={generateInvoice}>
-                  <Download className="w-4 h-4" />
-                </Button>
-              )}
-              <Button variant="ghost" size="sm">
-                <Eye className="w-4 h-4" />
-              </Button>
+              <span title={createdAt.toLocaleString()}>{formatDistanceToNow(createdAt, { addSuffix: true })}</span>
             </div>
           </div>
         </CardContent>
+        <CardFooter className="bg-muted/50 p-2 flex justify-end gap-2">
+          {order.isEditable && (
+            <Button variant="ghost" size="sm">
+              <Edit className="w-4 h-4 mr-1" />
+              Edit
+            </Button>
+          )}
+          <Button variant="ghost" size="sm">
+            <FileText className="w-4 h-4 mr-1" />
+            View
+          </Button>
+        </CardFooter>
       </Card>
 
       {/* Price Adjustment Dialog */}

@@ -1,59 +1,47 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { AdminSidebar } from "@/components/admin/admin-sidebar"
-import { HomePanel } from "@/components/admin/home-panel"
-import { SalesPanel } from "@/components/admin/sales-panel"
-import { InvoicePanel } from "@/components/admin/invoice-panel"
-import { ReportsPanel } from "@/components/admin/reports-panel"
-import { OrderPricingPanel } from "@/components/admin/order-pricing-panel"
-import { SettingsPanel } from "@/components/admin/settings-panel"
-import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
+import { ModernAdminDashboard } from "@/components/admin/modern-admin-dashboard"
 
 export default function AdminDashboard() {
-  const { currentUser } = useAuth()
+  const { user, isAuthenticated } = useAuth()
   const router = useRouter()
-  const [activePanel, setActivePanel] = useState("home")
 
   useEffect(() => {
-    if (!currentUser || currentUser.role !== "admin") {
+    if (!isAuthenticated || !user || user.role !== "admin") {
       router.push("/admin/login")
     }
-  }, [currentUser, router])
+  }, [isAuthenticated, user, router])
 
-  if (!currentUser) {
-    return <div>Loading...</div>
-  }
-
-  const renderPanel = () => {
-    switch (activePanel) {
-      case "home":
-        return <HomePanel />
-      case "sales":
-        return <SalesPanel />
-      case "invoice":
-        return <InvoicePanel />
-      case "reports":
-        return <ReportsPanel />
-      case "pricing":
-        return <OrderPricingPanel />
-      case "settings":
-        return <SettingsPanel />
-      default:
-        return <HomePanel />
-    }
-  }
-
-  return (
-    <SidebarProvider>
-      <div className="flex min-h-screen w-full">
-        <AdminSidebar activePanel={activePanel} setActivePanel={setActivePanel} />
-        <SidebarInset className="flex-1">
-          <div className="flex-1 overflow-auto">{renderPanel()}</div>
-        </SidebarInset>
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p>Loading dashboard...</p>
+        </div>
       </div>
-    </SidebarProvider>
-  )
+    )
+  }
+
+  if (user.role !== "admin") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You don't have permission to access this page.</p>
+          <button
+            onClick={() => router.push("/admin/login")}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return <ModernAdminDashboard />
 }

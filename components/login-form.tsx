@@ -1,16 +1,16 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Eye, EyeOff, ArrowLeft, Shield, Briefcase } from "lucide-react"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { AlertTriangle, CheckCircle, User, Mail, KeyRound, Shield, Lock } from "lucide-react"
 
 interface LoginFormProps {
   role: "admin" | "salesman"
@@ -19,180 +19,277 @@ interface LoginFormProps {
 export function LoginForm({ role }: LoginFormProps) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [name, setName] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(true)
   const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-
-  const { loginUser } = useAuth()
+  const [success, setSuccess] = useState("")
+  const { login, loginByName, users, autoLoginLastUser } = useAuth()
   const router = useRouter()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  useEffect(() => {
+    // Try to auto-login when component mounts
+    const attemptAutoLogin = async () => {
+      setIsAutoLoggingIn(true)
+      const success = await autoLoginLastUser()
+      if (success) {
+        setSuccess("Welcome back! Redirecting...")
+        setTimeout(() => {
+          if (role === "admin") {
+            router.push("/admin/dashboard")
+          } else {
+            router.push("/salesman/dashboard")
+          }
+        }, 1000)
+      } else {
+        // Auto-fill name if there's only one salesman
+        if (role === "salesman") {
+          const salesmen = users.filter((u) => u.role === "salesman")
+          if (salesmen.length === 1) {
+            setName(salesmen[0].name)
+          }
+        }
+      }
+      setIsAutoLoggingIn(false)
+    }
+
+    attemptAutoLogin()
+  }, [role, users, autoLoginLastUser, router])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSubmitting(true)
     setError("")
-    setIsLoading(true)
+    setSuccess("")
 
-    // Basic validation
-    if (!email.trim()) {
-      setError("Please enter your email address")
-      setIsLoading(false)
-      return
+    try {
+      let success = false
+
+      if (role === "admin") {
+        // Admin uses secure email/password
+        success = await login(email, password, role)
+      } else {
+        // Salesman uses name-only login
+        if (!name.trim()) {
+          setError("Please enter your name")
+          setIsSubmitting(false)
+          return
+        }
+        success = await loginByName(name.trim())
+      }
+
+      if (success) {
+        setSuccess("Welcome back! Redirecting...")
+        // Redirect to the appropriate dashboard
+        setTimeout(() => {
+          if (role === "admin") {
+            router.push("/admin/dashboard")
+          } else {
+            router.push("/salesman/dashboard")
+          }
+        }, 1000)
+      } else {
+        if (role === "admin") {
+          setError("Access Denied! Only authorized admin credentials are accepted.")
+        } else {
+          const salesmen = users.filter((u) => u.role === "salesman")
+          if (salesmen.length === 0) {
+            setError("No salesman accounts found. Please register first.")
+          } else {
+            setError(`Salesman "${name}" not found. Available names: ${salesmen.map((s) => s.name).join(", ")}`)
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      setError("An error occurred during login")
+    } finally {
+      setIsSubmitting(false)
     }
-
-    if (!password.trim()) {
-      setError("Please enter your password")
-      setIsLoading(false)
-      return
-    }
-
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
-      setError("Please enter a valid email address")
-      setIsLoading(false)
-      return
-    }
-
-    // Simulate loading delay for better UX
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    // Attempt login
-    const loginSuccess = loginUser(email.trim(), password, role)
-
-    if (loginSuccess) {
-      // Clear form and redirect
-      setEmail("")
-      setPassword("")
-      router.push(`/${role}/dashboard`)
-    } else {
-      setError("Invalid email or password. Please check your credentials and try again.")
-    }
-
-    setIsLoading(false)
   }
 
-  const roleConfig = {
-    admin: {
-      title: "Admin Login",
-      description: "Access your administrator dashboard",
-      icon: Shield,
-      color: "indigo",
-    },
-    salesman: {
-      title: "Salesman Login",
-      description: "Access your sales dashboard",
-      icon: Briefcase,
-      color: "green",
-    },
+  if (isAutoLoggingIn) {
+    return (
+      <Card className="w-full max-w-md mx-auto">
+        <CardContent className="pt-6">
+          <div className="flex flex-col items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-center text-muted-foreground">Checking for existing session...</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
-
-  const config = roleConfig[role]
-  const Icon = config.icon
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6">
-          <Link href="/" className="inline-flex items-center text-sm text-gray-600 hover:text-gray-900">
-            <ArrowLeft className="w-4 h-4 mr-1" />
-            Back to Home
-          </Link>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4">
+      <Card
+        className={`w-full max-w-md mx-auto shadow-2xl border-0 ${role === "admin" ? "bg-gradient-to-br from-red-50 to-orange-50" : "bg-white/80"} backdrop-blur-sm`}
+      >
+        <CardHeader className="text-center pb-6">
+          <div
+            className={`mx-auto w-16 h-16 ${role === "admin" ? "bg-gradient-to-r from-red-500 to-orange-600" : "bg-gradient-to-r from-blue-500 to-indigo-600"} rounded-full flex items-center justify-center mb-4 shadow-lg`}
+          >
+            {role === "admin" ? <Shield className="h-8 w-8 text-white" /> : <User className="h-8 w-8 text-white" />}
+          </div>
+          <CardTitle
+            className={`text-3xl font-bold ${role === "admin" ? "bg-gradient-to-r from-red-600 to-orange-600" : "bg-gradient-to-r from-blue-600 to-indigo-600"} bg-clip-text text-transparent flex items-center justify-center gap-2`}
+          >
+            {role === "admin" ? (
+              <>
+                <Lock className="h-6 w-6 text-red-600" />
+                Secure Admin Access
+              </>
+            ) : (
+              <>
+                <User className="h-5 w-5 text-blue-600" />
+                Salesman Login
+              </>
+            )}
+          </CardTitle>
+          <CardDescription className="text-lg text-gray-600 mt-2">
+            {role === "admin"
+              ? "🔒 Authorized Personnel Only - Secure Login Required"
+              : "Enter your name to access the salesman dashboard"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <Alert variant="destructive" className="border-red-300 bg-red-50">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-red-800 font-medium">{error}</AlertDescription>
+              </Alert>
+            )}
 
-        <Card className="shadow-lg">
-          <CardHeader className="text-center">
-            <div
-              className={`w-16 h-16 bg-${config.color}-100 rounded-full flex items-center justify-center mx-auto mb-4`}
-            >
-              <Icon className={`w-8 h-8 text-${config.color}-600`} />
-            </div>
-            <CardTitle className="text-2xl">{config.title}</CardTitle>
-            <CardDescription>{config.description}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
+            {success && (
+              <Alert className="bg-green-50 text-green-800 border-green-200">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800 font-medium">{success}</AlertDescription>
+              </Alert>
+            )}
+
+            {role === "admin" ? (
+              <>
+                {/* Secure Admin Login */}
+                <Card className="border-2 border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                        <Mail className="h-4 w-4 text-white" />
+                      </div>
+                      <Label htmlFor="email" className="text-lg font-semibold text-red-800 flex items-center gap-2">
+                        Admin Email
+                        <Shield className="h-4 w-4 text-red-600" />
+                      </Label>
+                    </div>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter authorized admin email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="border-red-300 focus:border-red-500 focus:ring-red-500 text-lg py-3"
+                    />
+                    <p className="text-sm text-red-600 mt-2 font-medium">🔐 Only authorized admin email accepted</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-2 border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                        <KeyRound className="h-4 w-4 text-white" />
+                      </div>
+                      <Label htmlFor="password" className="text-lg font-semibold text-red-800 flex items-center gap-2">
+                        Secure Password
+                        <Lock className="h-4 w-4 text-red-600" />
+                      </Label>
+                    </div>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Enter secure admin password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="border-red-300 focus:border-red-500 focus:ring-red-500 text-lg py-3"
+                    />
+                    <p className="text-sm text-red-600 mt-2 font-medium">🛡️ High-security authentication required</p>
+                  </CardContent>
+                </Card>
+
+                {/* Security Notice */}
+                <Alert className="bg-yellow-50 border-yellow-200">
+                  <Shield className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800 font-medium">
+                    <strong>Security Notice:</strong> This is a secure admin portal. Only pre-authorized credentials are
+                    accepted. Unauthorized access attempts are logged.
+                  </AlertDescription>
+                </Alert>
+              </>
+            ) : (
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
+                <Label htmlFor="name" className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  Salesman Name
+                </Label>
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value)
-                    if (error) setError("") // Clear error when user starts typing
-                  }}
-                  disabled={isLoading}
-                  autoComplete="email"
+                  id="name"
+                  type="text"
+                  placeholder="Enter your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   required
                 />
               </div>
+            )}
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value)
-                      if (error) setError("") // Clear error when user starts typing
-                    }}
-                    disabled={isLoading}
-                    autoComplete="current-password"
-                    required
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                    disabled={isLoading}
-                    tabIndex={-1}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
+            <Button
+              type="submit"
+              className={`w-full py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 ${
+                role === "admin"
+                  ? "bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700"
+                  : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+              }`}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  {role === "admin" ? "Authenticating..." : "Logging in..."}
                 </div>
-              </div>
-
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
+              ) : (
+                <>
+                  {role === "admin" ? (
+                    <>
+                      <Shield className="h-5 w-5 mr-2" />
+                      Secure Admin Login
+                    </>
+                  ) : (
+                    "Login"
+                  )}
+                </>
               )}
-
-              <Button
-                type="submit"
-                className={`w-full bg-${config.color}-600 hover:bg-${config.color}-700`}
-                disabled={isLoading}
-              >
-                {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Don't have an account?{" "}
-                <Link
-                  href={`/${role}/signup`}
-                  className={`text-${config.color}-600 hover:text-${config.color}-700 font-medium`}
-                >
-                  Register here
-                </Link>
-              </p>
-            </div>
-
-            {/* Security Notice */}
-            <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs text-gray-600 text-center">
-                🔒 Your credentials are securely encrypted and protected
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex justify-center border-t bg-gray-50/50 p-4">
+          <p className="text-sm text-muted-foreground">
+            {role === "admin" ? (
+              <span className="text-red-600 font-medium">🔒 Secure Admin Portal - Authorized Access Only</span>
+            ) : (
+              <>
+                First time here?{" "}
+                <a href={`/${role}/signup`} className="text-primary hover:underline">
+                  Register as Salesman
+                </a>
+              </>
+            )}
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

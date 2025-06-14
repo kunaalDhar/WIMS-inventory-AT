@@ -17,7 +17,7 @@ interface AdminLoginDialogProps {
 }
 
 export function AdminLoginDialog({ open, onOpenChange }: AdminLoginDialogProps) {
-  const { loginUser } = useAuth()
+  const { login } = useAuth()
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -51,18 +51,23 @@ export function AdminLoginDialog({ open, onOpenChange }: AdminLoginDialogProps) 
       return
     }
 
-    // Simulate loading delay
-    await new Promise((resolve) => setTimeout(resolve, 600))
+    try {
+      // Simulate loading delay
+      await new Promise((resolve) => setTimeout(resolve, 600))
 
-    // Attempt admin login
-    const loginSuccess = loginUser(email.trim(), password, "admin")
+      // Attempt admin login
+      const loginSuccess = await login(email.trim(), password, "admin")
 
-    if (loginSuccess) {
-      handleClose()
-      // Immediate redirect without page refresh using Next.js router
-      router.push("/admin/dashboard")
-    } else {
-      setError("Invalid admin credentials. Please check your email and password.")
+      if (loginSuccess) {
+        handleClose()
+        // Immediate redirect without page refresh using Next.js router
+        router.push("/admin/dashboard")
+      } else {
+        setError("Invalid admin credentials. Please check your email and password.")
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      setError("Login failed. Please try again.")
     }
 
     setIsLoading(false)

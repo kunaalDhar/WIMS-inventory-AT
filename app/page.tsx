@@ -1,384 +1,243 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Users, UserCheck, Shield, Briefcase, Lock, Key, Settings } from "lucide-react"
-import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { useAuth } from "@/contexts/auth-context"
+import {
+  ShoppingCart,
+  Users,
+  BarChart3,
+  Package,
+  Shield,
+  User,
+  Building2,
+  TrendingUp,
+  Lock,
+  UserCheck,
+} from "lucide-react"
 
-interface FeatureModalData {
-  title: string
-  description: string
-  benefits: string[]
-  howItWorks: string[]
-  icon: React.ComponentType<any>
-  color: string
-}
-
-const featureDetails: Record<string, FeatureModalData> = {
-  secure: {
-    title: "Secure Login System",
-    description: "Advanced authentication with email/password protection and encrypted data transmission.",
-    benefits: [
-      "End-to-end encryption for all login credentials",
-      "Secure session management with automatic timeout",
-      "Protection against brute force attacks",
-      "Industry-standard security protocols (HTTPS/TLS)",
-      "Regular security audits and updates",
-    ],
-    howItWorks: [
-      "User enters email and password credentials",
-      "System validates credentials against encrypted database",
-      "Secure session token is generated and stored",
-      "All subsequent requests are authenticated via token",
-      "Session automatically expires after inactivity",
-    ],
-    icon: Shield,
-    color: "blue",
-  },
-  otp: {
-    title: "OTP Verification",
-    description: "One-Time Password system for enhanced security and multi-factor authentication.",
-    benefits: [
-      "Additional layer of security beyond passwords",
-      "Protection against unauthorized access",
-      "Time-limited codes for maximum security",
-      "SMS and email delivery options",
-      "Backup verification methods available",
-    ],
-    howItWorks: [
-      "User completes initial login with credentials",
-      "System generates unique 6-digit OTP code",
-      "OTP is sent via SMS or email to registered contact",
-      "User enters OTP within time limit (5 minutes)",
-      "Access granted only after successful OTP verification",
-    ],
-    icon: Key,
-    color: "green",
-  },
-  roles: {
-    title: "Role-Based Access Control",
-    description: "Intelligent permission system that provides appropriate access levels for different user types.",
-    benefits: [
-      "Customized dashboards for each user role",
-      "Restricted access to sensitive information",
-      "Streamlined workflows for specific job functions",
-      "Enhanced data security and compliance",
-      "Scalable permission management",
-    ],
-    howItWorks: [
-      "User role is assigned during account creation",
-      "System determines access permissions based on role",
-      "Dashboard and features are customized accordingly",
-      "Admin users get full system management access",
-      "Sales users get order and customer management tools",
-    ],
-    icon: Settings,
-    color: "purple",
-  },
-}
-
-export default function LandingPage() {
-  const [selectedFeature, setSelectedFeature] = useState<string | null>(null)
-  const [isModalOpen, setIsModalOpen] = useState(false)
-
-  const handleFeatureClick = (featureKey: string) => {
-    setSelectedFeature(featureKey)
-    setIsModalOpen(true)
-  }
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-    setSelectedFeature(null)
-  }
-
-  const currentFeature = selectedFeature ? featureDetails[selectedFeature] : null
+export default function HomePage() {
+  const { users } = useAuth()
+  const salesmen = users.filter((user) => user.role === "salesman")
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-lg">W</span>
+      <header className="bg-white/80 backdrop-blur-sm border-b border-blue-100 sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
+                <Building2 className="h-7 w-7 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">WIMS</h1>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                  WIMS
+                </h1>
+                <p className="text-sm text-gray-600">Warehouse Inventory Management System</p>
+              </div>
             </div>
-            <p className="text-sm text-gray-600 hidden sm:block">Warehouse Intelligent Management System</p>
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              v2.0 Enterprise
+            </Badge>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Welcome to WIMS</h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Secure access portal for administrators and sales personnel. Choose your role to get started.
-          </p>
-        </div>
+      {/* Hero Section */}
+      <section className="py-20 px-4">
+        <div className="container mx-auto text-center">
+          <div className="max-w-4xl mx-auto">
+            <h1 className="text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              Welcome to WIMS
+            </h1>
+            <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+              Advanced Warehouse Inventory Management System designed for modern businesses. Streamline your operations
+              with powerful tools for inventory tracking, order management, and sales analytics.
+            </p>
 
-        {/* Auth Options Grid */}
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          {/* Admin Section */}
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 text-indigo-600" />
+            {/* Feature Highlights */}
+            <div className="grid md:grid-cols-4 gap-6 mb-12">
+              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-blue-100 shadow-lg hover:shadow-xl transition-all duration-300">
+                <Package className="h-8 w-8 text-blue-600 mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-800 mb-2">Inventory Control</h3>
+                <p className="text-sm text-gray-600">Real-time stock tracking and management</p>
               </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Administrator</h3>
-              <p className="text-gray-600">Manage system settings and user accounts</p>
-            </div>
-
-            <div className="space-y-4">
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center space-x-2">
-                    <UserCheck className="w-5 h-5 text-green-600" />
-                    <span>Admin Login</span>
-                  </CardTitle>
-                  <CardDescription>Access your admin dashboard</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/admin/login">
-                    <Button className="w-full bg-indigo-600 hover:bg-indigo-700">Login as Admin</Button>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Users className="w-5 h-5 text-blue-600" />
-                    <span>Admin Signup</span>
-                  </CardTitle>
-                  <CardDescription>Create a new admin account</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/admin/signup">
-                    <Button variant="outline" className="w-full border-indigo-600 text-indigo-600 hover:bg-indigo-50">
-                      Register as Admin
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Salesman Section */}
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Briefcase className="w-8 h-8 text-green-600" />
+              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-indigo-100 shadow-lg hover:shadow-xl transition-all duration-300">
+                <ShoppingCart className="h-8 w-8 text-indigo-600 mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-800 mb-2">Order Management</h3>
+                <p className="text-sm text-gray-600">Streamlined order processing workflow</p>
               </div>
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">Sales Personnel</h3>
-              <p className="text-gray-600">Access sales tools and customer data</p>
-            </div>
-
-            <div className="space-y-4">
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center space-x-2">
-                    <UserCheck className="w-5 h-5 text-green-600" />
-                    <span>Salesman Login</span>
-                  </CardTitle>
-                  <CardDescription>Access your sales dashboard</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/salesman/login">
-                    <Button className="w-full bg-green-600 hover:bg-green-700">Login as Salesman</Button>
-                  </Link>
-                </CardContent>
-              </Card>
-
-              <Card className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Users className="w-5 h-5 text-blue-600" />
-                    <span>Salesman Signup</span>
-                  </CardTitle>
-                  <CardDescription>Create a new salesman account</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Link href="/salesman/signup">
-                    <Button variant="outline" className="w-full border-green-600 text-green-600 hover:bg-green-50">
-                      Register as Salesman
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-purple-100 shadow-lg hover:shadow-xl transition-all duration-300">
+                <BarChart3 className="h-8 w-8 text-purple-600 mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-800 mb-2">Analytics</h3>
+                <p className="text-sm text-gray-600">Comprehensive business insights</p>
+              </div>
+              <div className="bg-white/60 backdrop-blur-sm rounded-xl p-6 border border-pink-100 shadow-lg hover:shadow-xl transition-all duration-300">
+                <Users className="h-8 w-8 text-pink-600 mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-800 mb-2">Team Management</h3>
+                <p className="text-sm text-gray-600">Multi-user access and permissions</p>
+              </div>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Features Section */}
-        <div className="mt-16 text-center">
-          <h3 className="text-2xl font-semibold text-gray-900 mb-8">Secure Authentication Features</h3>
-          <div className="grid sm:grid-cols-3 gap-6 max-w-3xl mx-auto">
-            {/* Secure Login Card */}
-            <Card
-              className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-              onClick={() => handleFeatureClick("secure")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  handleFeatureClick("secure")
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label="Learn more about Secure Login"
-            >
-              <CardContent className="p-6">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Shield className="w-6 h-6 text-blue-600" />
+      {/* Login Options */}
+      <section className="py-16 px-4 bg-white/40 backdrop-blur-sm">
+        <div className="container mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-12 text-gray-800">Access Your Dashboard</h2>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Secure Admin Login */}
+            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-gradient-to-br from-red-50 to-orange-50 shadow-xl">
+              <CardHeader className="text-center pb-6">
+                <div className="mx-auto w-16 h-16 bg-gradient-to-r from-red-500 to-orange-600 rounded-full flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <Shield className="h-8 w-8 text-white" />
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Secure Login</h4>
-                <p className="text-sm text-gray-600">Advanced email/password authentication with encryption</p>
-                <div className="mt-3 text-xs text-blue-600 font-medium">Click to learn more →</div>
+                <CardTitle className="text-2xl font-bold text-red-800 flex items-center justify-center gap-2">
+                  <Lock className="h-5 w-5" />
+                  Secure Admin Portal
+                </CardTitle>
+                <CardDescription className="text-red-600 font-medium">🔒 Authorized Personnel Only</CardDescription>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                <div className="bg-red-100 border border-red-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-red-800 font-medium mb-2">
+                    <Shield className="h-4 w-4 inline mr-1" />
+                    High-Security Access
+                  </p>
+                  <p className="text-xs text-red-700">
+                    Pre-authorized credentials required. Unauthorized access attempts are monitored and logged.
+                  </p>
+                </div>
+                <ul className="text-sm text-red-700 space-y-2 text-left">
+                  <li className="flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-red-600" />
+                    Complete system administration
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-red-600" />
+                    Advanced analytics & reports
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-red-600" />
+                    User management & permissions
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-red-600" />
+                    Full inventory control
+                  </li>
+                </ul>
+                <Button
+                  asChild
+                  className="w-full mt-6 bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  <a href="/admin/login">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Secure Admin Access
+                  </a>
+                </Button>
               </CardContent>
             </Card>
 
-            {/* OTP Verification Card */}
-            <Card
-              className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-              onClick={() => handleFeatureClick("otp")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  handleFeatureClick("otp")
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label="Learn more about OTP Verification"
-            >
-              <CardContent className="p-6">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Key className="w-6 h-6 text-green-600" />
+            {/* Salesman Login */}
+            <Card className="group hover:shadow-2xl transition-all duration-300 border-0 bg-gradient-to-br from-blue-50 to-indigo-50 shadow-xl">
+              <CardHeader className="text-center pb-6">
+                <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mb-4 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                  <User className="h-8 w-8 text-white" />
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">OTP Verification</h4>
-                <p className="text-sm text-gray-600">One-time password for enhanced security</p>
-                <div className="mt-3 text-xs text-green-600 font-medium">Click to learn more →</div>
-              </CardContent>
-            </Card>
-
-            {/* Role-Based Access Card */}
-            <Card
-              className="cursor-pointer hover:shadow-lg hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2"
-              onClick={() => handleFeatureClick("roles")}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault()
-                  handleFeatureClick("roles")
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label="Learn more about Role-Based Access"
-            >
-              <CardContent className="p-6">
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                  <Settings className="w-6 h-6 text-purple-600" />
+                <CardTitle className="text-2xl font-bold text-blue-800">Salesman Portal</CardTitle>
+                <CardDescription className="text-blue-600">Sales team access and order management</CardDescription>
+              </CardHeader>
+              <CardContent className="text-center space-y-4">
+                {salesmen.length > 0 && (
+                  <div className="bg-blue-100 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p className="text-sm text-blue-800 font-medium mb-2">
+                      <UserCheck className="h-4 w-4 inline mr-1" />
+                      Registered Salesmen ({salesmen.length})
+                    </p>
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {salesmen.slice(0, 3).map((salesman) => (
+                        <Badge key={salesman.id} variant="secondary" className="text-xs bg-blue-200 text-blue-800">
+                          {salesman.name}
+                        </Badge>
+                      ))}
+                      {salesmen.length > 3 && (
+                        <Badge variant="secondary" className="text-xs bg-blue-200 text-blue-800">
+                          +{salesmen.length - 3} more
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <ul className="text-sm text-blue-700 space-y-2 text-left">
+                  <li className="flex items-center gap-2">
+                    <ShoppingCart className="h-4 w-4 text-blue-600" />
+                    Create and manage orders
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-blue-600" />
+                    Client relationship management
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-blue-600" />
+                    Inventory lookup and tracking
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-blue-600" />
+                    Sales performance metrics
+                  </li>
+                </ul>
+                <div className="flex gap-2 mt-6">
+                  <Button
+                    asChild
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <a href="/salesman/login">
+                      <User className="h-4 w-4 mr-2" />
+                      Login
+                    </a>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="flex-1 border-blue-300 text-blue-700 hover:bg-blue-50 font-semibold py-3 shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <a href="/salesman/signup">
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Register
+                    </a>
+                  </Button>
                 </div>
-                <h4 className="font-semibold text-gray-900 mb-2">Role-Based Access</h4>
-                <p className="text-sm text-gray-600">Separate portals for admins and sales staff</p>
-                <div className="mt-3 text-xs text-purple-600 font-medium">Click to learn more →</div>
               </CardContent>
             </Card>
           </div>
         </div>
-      </main>
+      </section>
 
       {/* Footer */}
-      <footer className="bg-white border-t mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center text-gray-600">
-            <p>&copy; 2024 WIMS - Warehouse Intelligent Management System. All rights reserved.</p>
+      <footer className="bg-gray-900 text-white py-12">
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex items-center justify-center space-x-3 mb-4">
+            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+              <Building2 className="h-6 w-6 text-white" />
+            </div>
+            <h3 className="text-xl font-bold">WIMS</h3>
+          </div>
+          <p className="text-gray-400 mb-4">
+            Warehouse Inventory Management System - Empowering businesses with intelligent inventory solutions
+          </p>
+          <div className="flex justify-center space-x-6 text-sm text-gray-500">
+            <span>© 2024 WIMS Enterprise</span>
+            <span>•</span>
+            <span>Secure & Reliable</span>
+            <span>•</span>
+            <span>24/7 Support</span>
           </div>
         </div>
       </footer>
-
-      {/* Feature Detail Modal */}
-      <Dialog open={isModalOpen} onOpenChange={handleCloseModal}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          {currentFeature && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center space-x-3 text-xl">
-                  <div
-                    className={`w-10 h-10 bg-${currentFeature.color}-100 rounded-lg flex items-center justify-center`}
-                  >
-                    <currentFeature.icon className={`w-6 h-6 text-${currentFeature.color}-600`} />
-                  </div>
-                  <span>{currentFeature.title}</span>
-                </DialogTitle>
-                <DialogDescription className="text-base mt-2">{currentFeature.description}</DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-6 mt-6">
-                {/* Benefits Section */}
-                <div>
-                  <h4 className="font-semibold text-lg mb-3 text-gray-900">Key Benefits</h4>
-                  <ul className="space-y-2">
-                    {currentFeature.benefits.map((benefit, index) => (
-                      <li key={index} className="flex items-start space-x-2">
-                        <div className={`w-2 h-2 bg-${currentFeature.color}-600 rounded-full mt-2 flex-shrink-0`}></div>
-                        <span className="text-gray-700">{benefit}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* How It Works Section */}
-                <div>
-                  <h4 className="font-semibold text-lg mb-3 text-gray-900">How It Works</h4>
-                  <ol className="space-y-3">
-                    {currentFeature.howItWorks.map((step, index) => (
-                      <li key={index} className="flex items-start space-x-3">
-                        <div
-                          className={`w-6 h-6 bg-${currentFeature.color}-600 text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0`}
-                        >
-                          {index + 1}
-                        </div>
-                        <span className="text-gray-700">{step}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-
-                {/* Security Notice */}
-                <div
-                  className={`p-4 bg-${currentFeature.color}-50 border border-${currentFeature.color}-200 rounded-lg`}
-                >
-                  <div className="flex items-center space-x-2">
-                    <Lock className={`w-5 h-5 text-${currentFeature.color}-600`} />
-                    <span className={`font-medium text-${currentFeature.color}-800`}>Security Guarantee</span>
-                  </div>
-                  <p className={`text-sm text-${currentFeature.color}-700 mt-1`}>
-                    All authentication features are built with enterprise-grade security standards and are regularly
-                    audited for vulnerabilities.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex justify-end mt-6">
-                <Button
-                  onClick={handleCloseModal}
-                  className={`bg-${currentFeature.color}-600 hover:bg-${currentFeature.color}-700`}
-                >
-                  Got it, thanks!
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

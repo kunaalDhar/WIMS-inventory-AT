@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useOrders } from "@/contexts/order-context"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -9,608 +11,646 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, ShoppingCart, CheckCircle, IndianRupee, Clock, Calculator, Building2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  CheckCircle,
+  AlertTriangle,
+  Building2,
+  History,
+  User,
+  Calculator,
+} from "lucide-react"
+import { PriceAdjustmentDialog } from "./price-adjustment-dialog"
 
 interface CreateOrderDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  editOrder?: any
 }
 
-interface OrderLineItem {
+interface OrderItem {
   id: string
-  productId: string
-  productName: string
-  vendorName: string
-  quantity: number
-  unitPrice: number
-  totalAmount: number
-  gstBill: "yes" | "no"
-  gstNumber?: string
+  name: string
+  category: string
+  volume: string
+  bottlesPerCase: number
+  requestedQuantity: number
+  unit: string
+  description?: string
+  unitPrice?: number
+  lineTotal?: number
 }
 
-export function CreateOrderDialog({ open, onOpenChange }: CreateOrderDialogProps) {
-  const { currentUser } = useAuth()
-  const { availableItems, addOrder } = useOrders()
+export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrderDialogProps) {
+  const { user } = useAuth()
+  const { clients, availableItems, addOrder, updateOrder, getClientOrderHistory, orderCounter, adjustOrderPricing } =
+    useOrders()
+  const [selectedClientId, setSelectedClientId] = useState<string>(editOrder?.clientId || "")
+  const [selectedItems, setSelectedItems] = useState<OrderItem[]>(editOrder?.items || [])
+  const [notes, setNotes] = useState(editOrder?.notes || "")
+  const [withGst, setWithGst] = useState(editOrder?.withGst || false)
+  const [gstNumber, setGstNumber] = useState(editOrder?.gstNumber || "")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [showPriceAdjustment, setShowPriceAdjustment] = useState(false)
+  const [createdOrder, setCreatedOrder] = useState<any>(null)
 
-  // Form state
-  const [selectedProduct, setSelectedProduct] = useState("")
-  const [vendorName, setVendorName] = useState("")
-  const [quantity, setQuantity] = useState("1") // Default to 1
-  const [unitPrice, setUnitPrice] = useState("")
-  const [gstBill, setGstBill] = useState<"yes" | "no">("no")
-  const [gstNumber, setGstNumber] = useState("")
-  const [orderItems, setOrderItems] = useState<OrderLineItem[]>([])
-  const [notes, setNotes] = useState("")
+  const selectedClient = clients.find((client) => client.id === selectedClientId)
+  const clientOrderHistory = selectedClient ? getClientOrderHistory(selectedClient.id) : []
 
-  // UI state
-  const [error, setError] = useState("")
-  const [success, setSuccess] = useState("")
-  const [isPlacingOrder, setIsPlacingOrder] = useState(false)
-  const [orderPlaced, setOrderPlaced] = useState(false)
-  const [placedOrderId, setPlacedOrderId] = useState("")
-
-  // Calculate total amount in real-time
-  const calculateTotalAmount = (qty: number, price: number) => {
-    return qty * price
-  }
-
-  // Get current total amount for display
-  const getCurrentTotalAmount = () => {
-    const qty = Number.parseFloat(quantity) || 1
-    const price = Number.parseFloat(unitPrice) || 0
-    return calculateTotalAmount(qty, price)
-  }
-
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
-
-  // Validate current line item
-  const validateLineItem = () => {
-    // Mandatory fields: product, vendor name, unit price
-    if (!selectedProduct) {
-      setError("Please select a product")
-      return false
+  // Sort clients by most recently used and order count
+  const sortedClients = [...clients].sort((a, b) => {
+    // First sort by last used (most recent first)
+    const aLastUsed = new Date(a.lastUsed || a.createdAt).getTime()
+    const bLastUsed = new Date(b.lastUsed || b.createdAt).getTime()
+    if (bLastUsed !== aLastUsed) {
+      return bLastUsed - aLastUsed
     }
-    if (!vendorName.trim()) {
-      setError("Please enter vendor name")
-      return false
-    }
-    if (!unitPrice || Number.parseFloat(unitPrice) <= 0) {
-      setError("Please enter a valid unit price")
-      return false
-    }
+    // Then by order count (most orders first)
+    return (b.orderCount || 0) - (a.orderCount || 0)
+  })
 
-    // Optional validation: if GST Bill is Yes, GST Number is required
-    if (gstBill === "yes" && !gstNumber.trim()) {
-      setError("Please enter GST number when GST Bill is Yes")
-      return false
-    }
+  const handleAddItemFromDropdown = (itemId: string) => {
+    const item = availableItems.find((i) => i.id === itemId)
+    if (!item) return
 
-    return true
-  }
-
-  // Add item to order
-  const handleAddItem = () => {
-    if (!validateLineItem()) return
-
-    const product = availableItems.find((item) => item.id === selectedProduct)
-    if (!product) {
-      setError("Selected product not found")
-      return
-    }
-
-    const qty = Number.parseFloat(quantity) || 1
-    const price = Number.parseFloat(unitPrice)
-    const total = calculateTotalAmount(qty, price)
-
-    const newItem: OrderLineItem = {
-      id: `item-${Date.now()}`,
-      productId: selectedProduct,
-      productName: product.name,
-      vendorName: vendorName.trim(),
-      quantity: qty,
-      unitPrice: price,
-      totalAmount: total,
-      gstBill,
-      gstNumber: gstBill === "yes" ? gstNumber.trim() : undefined,
-    }
-
-    setOrderItems((prev) => [...prev, newItem])
-
-    // Reset form (keep vendor name for convenience)
-    setSelectedProduct("")
-    setQuantity("1")
-    setUnitPrice("")
-    setGstBill("no")
-    setGstNumber("")
-    setError("")
-  }
-
-  // Remove item from order
-  const handleRemoveItem = (itemId: string) => {
-    setOrderItems((prev) => prev.filter((item) => item.id !== itemId))
-  }
-
-  // Calculate order totals
-  const getOrderTotals = () => {
-    const subtotal = orderItems.reduce((sum, item) => sum + item.totalAmount, 0)
-    return {
-      subtotal,
-      itemCount: orderItems.length,
-      totalQuantity: orderItems.reduce((sum, item) => sum + item.quantity, 0),
-    }
-  }
-
-  // Validate complete order
-  const validateOrder = () => {
-    if (orderItems.length === 0) {
-      setError("Please add at least one item to the order")
-      return false
-    }
-    setError("")
-    return true
-  }
-
-  // Place order
-  const handlePlaceOrder = async () => {
-    if (!validateOrder() || !currentUser) return
-
-    setIsPlacingOrder(true)
-    setError("")
-
-    try {
-      const orderId = `ORD-${Date.now()}`
-      const totals = getOrderTotals()
-
-      // Convert order items to order format
-      const orderItemsFormatted = orderItems.map((item) => {
-        const product = availableItems.find((p) => p.id === item.productId)!
-        return {
-          ...product,
-          requestedQuantity: item.quantity,
-          salesmanPrice: item.unitPrice,
-          vendorName: item.vendorName,
-          gstBill: item.gstBill,
-          gstNumber: item.gstNumber,
-        }
-      })
-
-      const newOrder = {
-        salesmanId: currentUser.id,
-        salesmanName: currentUser.name,
-        vendorId: `vendor-${Date.now()}`, // Generate vendor ID
-        vendorName: orderItems[0].vendorName, // Use vendor name from first item
-        items: orderItemsFormatted,
-        status: "pending" as const,
-        totalItems: totals.totalQuantity,
-        notes,
-        salesmanPricing: {
-          subtotal: totals.subtotal,
-          total: totals.subtotal,
-          itemPrices: orderItems.reduce(
-            (acc, item) => {
-              acc[item.productId] = item.unitPrice
-              return acc
-            },
-            {} as Record<string, number>,
-          ),
-        },
+    const existingItem = selectedItems.find((selected) => selected.id === item.id)
+    if (existingItem) {
+      setSelectedItems((prev) =>
+        prev.map((selected) =>
+          selected.id === item.id ? { ...selected, requestedQuantity: selected.requestedQuantity + 1 } : selected,
+        ),
+      )
+    } else {
+      const newItem = {
+        ...item,
+        requestedQuantity: 1,
+        unitPrice: item.unitPrice || 0,
+        lineTotal: (item.unitPrice || 0) * 1,
       }
-
-      addOrder(newOrder)
-
-      setOrderPlaced(true)
-      setPlacedOrderId(orderId)
-      setSuccess("Order placed successfully! Waiting for admin to set official pricing.")
-
-      setTimeout(() => {
-        handleResetForm()
-        onOpenChange(false)
-      }, 3000)
-    } catch (error) {
-      setError("Failed to place order. Please try again.")
-      console.error("Order placement error:", error)
-    } finally {
-      setIsPlacingOrder(false)
+      setSelectedItems((prev) => [...prev, newItem])
     }
   }
 
-  // Reset form
-  const handleResetForm = () => {
-    setSelectedProduct("")
-    setVendorName("")
-    setQuantity("1")
-    setUnitPrice("")
-    setGstBill("no")
-    setGstNumber("")
-    setOrderItems([])
-    setNotes("")
-    setError("")
-    setSuccess("")
-    setOrderPlaced(false)
-    setPlacedOrderId("")
-    setIsPlacingOrder(false)
-  }
-
-  // Handle dialog close
-  const handleDialogClose = (open: boolean) => {
-    if (!open && !isPlacingOrder) {
-      handleResetForm()
+  const handleUpdateQuantity = (itemId: string, quantity: number) => {
+    if (quantity <= 0) {
+      setSelectedItems((prev) => prev.filter((item) => item.id !== itemId))
+    } else {
+      setSelectedItems((prev) =>
+        prev.map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                requestedQuantity: quantity,
+                lineTotal: (item.unitPrice || 0) * quantity,
+              }
+            : item,
+        ),
+      )
     }
-    onOpenChange(open)
   }
 
-  // Check if current line item can be added (mandatory fields only)
-  const canAddItem =
-    selectedProduct &&
-    vendorName.trim() &&
-    unitPrice &&
-    Number.parseFloat(unitPrice) > 0 &&
-    (gstBill === "no" || (gstBill === "yes" && gstNumber.trim()))
+  // Ensure price adjustment is available during order creation and editing
+  // Update the handleUpdateUnitPrice function to enforce price adjustment limits
+  const handleUpdateUnitPrice = (itemId: string, unitPrice: number) => {
+    const item = selectedItems.find((item) => item.id === itemId)
+    if (!item) return
 
-  // Check if order can be placed
-  const canPlaceOrder = orderItems.length > 0 && !isPlacingOrder && !orderPlaced
+    const originalItem = availableItems.find((i) => i.id === itemId)
+    const basePrice = originalItem?.unitPrice || 0
 
-  // Success state UI
-  if (orderPlaced) {
-    const totals = getOrderTotals()
-    return (
-      <Dialog open={open} onOpenChange={handleDialogClose}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2 text-green-600">
-              <CheckCircle className="w-6 h-6" />
-              <span>Order Submitted Successfully!</span>
-            </DialogTitle>
-            <DialogDescription>Your order is pending admin pricing</DialogDescription>
-          </DialogHeader>
+    // Enforce price adjustment limits (±₹10-15)
+    const minPrice = Math.max(0, basePrice - 15)
+    const maxPrice = basePrice + 15
+    const clampedPrice = Math.max(minPrice, Math.min(maxPrice, unitPrice))
 
-          <div className="space-y-4">
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Order ID:</span>
-                  <span className="text-yellow-700">{placedOrderId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Status:</span>
-                  <Badge className="bg-yellow-100 text-yellow-800">
-                    <Clock className="w-3 h-3 mr-1" />
-                    Pending Admin Pricing
-                  </Badge>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Items:</span>
-                  <span>{totals.itemCount} types</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Total Quantity:</span>
-                  <span>{totals.totalQuantity}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Your Total:</span>
-                  <span className="text-yellow-700 font-bold">{formatCurrency(totals.subtotal)}</span>
-                </div>
-              </div>
-            </div>
-
-            <Alert>
-              <Clock className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                ⏳ Order submitted to admin for official pricing
-                <br />🚫 Invoice generation disabled until admin sets prices
-                <br />📧 You'll be notified when pricing is complete
-              </AlertDescription>
-            </Alert>
-
-            <div className="flex justify-center">
-              <Button onClick={() => handleDialogClose(false)} className="w-full">
-                Close
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+    setSelectedItems((prev) =>
+      prev.map((item) =>
+        item.id === itemId
+          ? {
+              ...item,
+              unitPrice: clampedPrice,
+              lineTotal: clampedPrice * item.requestedQuantity,
+            }
+          : item,
+      ),
     )
   }
 
+  // Add a helper function to show price adjustment range
+  const getPriceAdjustmentRange = (itemId: string) => {
+    const originalItem = availableItems.find((i) => i.id === itemId)
+    const basePrice = originalItem?.unitPrice || 0
+    return {
+      min: Math.max(0, basePrice - 15),
+      max: basePrice + 15,
+    }
+  }
+
+  const handleRemoveItem = (itemId: string) => {
+    setSelectedItems((prev) => prev.filter((item) => item.id !== itemId))
+  }
+
+  const getTotalItems = () => {
+    return selectedItems.reduce((total, item) => total + item.requestedQuantity, 0)
+  }
+
+  const calculatePricing = () => {
+    const subtotal = selectedItems.reduce((sum, item) => sum + (item.lineTotal || 0), 0)
+    const taxRate = withGst ? 0.12 : 0 // 12% GST
+    const tax = subtotal * taxRate
+    const total = subtotal + tax
+
+    return { subtotal, tax, total, taxRate }
+  }
+
+  const { subtotal, tax, total, taxRate } = calculatePricing()
+
+  // Initialize form data when editing
+  useEffect(() => {
+    if (editOrder && open) {
+      setSelectedClientId(editOrder.clientId || "")
+      setSelectedItems(editOrder.items || [])
+      setNotes(editOrder.notes || "")
+      setWithGst(editOrder.withGst || false)
+      setGstNumber(editOrder.gstNumber || "")
+    } else if (!editOrder && open) {
+      // Reset form for new order
+      setSelectedClientId("")
+      setSelectedItems([])
+      setNotes("")
+      setWithGst(false)
+      setGstNumber("")
+    }
+  }, [editOrder, open])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !selectedClient) return
+
+    if (selectedItems.length === 0) {
+      alert("Please select at least one item")
+      return
+    }
+
+    if (withGst && !gstNumber.trim()) {
+      alert("Please enter GST number when GST is selected")
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const itemPrices: Record<string, number> = {}
+      selectedItems.forEach((item) => {
+        itemPrices[item.id] = item.unitPrice || 0
+      })
+
+      const salesmanPricing = {
+        subtotal,
+        tax,
+        total,
+        itemPrices,
+        withGst,
+      }
+
+      const orderData = {
+        salesmanId: user.id,
+        salesmanName: user.name,
+        clientId: selectedClient.id,
+        clientName: selectedClient.name,
+        items: selectedItems,
+        status: "pending" as const,
+        totalItems: getTotalItems(),
+        notes: notes.trim(),
+        withGst,
+        gstNumber: withGst ? gstNumber.trim() : undefined,
+        salesmanPricing,
+        isEditable: true,
+      }
+
+      if (editOrder) {
+        // Update existing order
+        updateOrder(editOrder.id, orderData)
+        alert("Order updated successfully!")
+        onOpenChange(false)
+      } else {
+        // Create new order
+        const newOrder = addOrder(orderData)
+        setCreatedOrder(newOrder)
+
+        // Show success message briefly, then show price adjustment dialog
+        setShowSuccess(true)
+        setTimeout(() => {
+          setShowSuccess(false)
+          setShowPriceAdjustment(true)
+        }, 2000)
+      }
+
+      // Reset form for new orders
+      if (!editOrder) {
+        setSelectedClientId("")
+        setSelectedItems([])
+        setNotes("")
+        setWithGst(false)
+        setGstNumber("")
+      }
+    } catch (error) {
+      console.error("Error saving order:", error)
+      alert("Failed to save order. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleClose = () => {
+    if (!isSubmitting) {
+      setShowSuccess(false)
+      onOpenChange(false)
+    }
+  }
+
+  const nextOrderNumber = `OID${String(orderCounter).padStart(3, "0")}`
+
   return (
-    <Dialog open={open} onOpenChange={handleDialogClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2">
             <ShoppingCart className="w-5 h-5" />
-            <span>Create New Order</span>
+            <span>{editOrder ? `Edit Order ${editOrder.orderNumber}` : `Create New Order (${nextOrderNumber})`}</span>
           </DialogTitle>
           <DialogDescription>
-            Add products with pricing details. Admin will set official pricing after submission.
+            {editOrder
+              ? "Update the order details and pricing below."
+              : "Select a client, add items with pricing, and choose GST options to create a new order."}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Add Item Section */}
-          <div className="space-y-4">
-            <Label className="text-lg font-semibold">Add Items to Order</Label>
+        {showSuccess ? (
+          <div className="py-8">
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Order Created Successfully!</strong>
+                <br />
+                Your order <strong>{nextOrderNumber}</strong> has been submitted with salesman pricing.
+                <br />
+                <br />
+                <strong>Order Summary:</strong>
+                <br />• Client: {selectedClient?.name}
+                <br />• Items: {selectedItems.length} types, {getTotalItems()} total units
+                <br />• Total: ₹{total.toFixed(2)} {withGst ? "(with 12% GST)" : "(without GST)"}
+                <br />• Status: Pending Admin Review
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Client Selection */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="client">Select Client *</Label>
+                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose an existing client for this order" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortedClients.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        <Building2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>No clients available</p>
+                        <p className="text-xs">Add a client first to create orders</p>
+                      </div>
+                    ) : (
+                      sortedClients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          <div className="flex flex-col">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{client.name || client.partyName}</span>
+                              {(client.orderCount || 0) > 0 && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {client.orderCount} order{(client.orderCount || 0) !== 1 ? "s" : ""}
+                                </Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {client.contactPerson && `Contact: ${client.contactPerson}`}
+                              {client.email && ` • ${client.email}`}
+                              {client.phone && ` • ${client.phone}`}
+                              {client.city && ` • ${client.city}`}
+                              {client.area && ` • ${client.area}`}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-            <div className="p-4 border rounded-lg bg-muted/20 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Product Selection - MANDATORY */}
-                <div className="space-y-2">
-                  <Label htmlFor="product">Product *</Label>
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct} disabled={isPlacingOrder}>
+              {/* Selected Client Info */}
+              {selectedClient && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      Selected Client Details
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium">{selectedClient.name}</p>
+                        {selectedClient.email && <p className="text-muted-foreground">{selectedClient.email}</p>}
+                        {selectedClient.phone && <p className="text-muted-foreground">{selectedClient.phone}</p>}
+                      </div>
+                      <div>
+                        {selectedClient.contactPerson && (
+                          <p>
+                            <strong>Contact:</strong> {selectedClient.contactPerson}
+                          </p>
+                        )}
+                        {selectedClient.gstNumber && (
+                          <p>
+                            <strong>GST:</strong> {selectedClient.gstNumber}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <History className="w-3 h-3" />
+                          <span className="text-xs text-muted-foreground">
+                            {clientOrderHistory.length} previous order{clientOrderHistory.length !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Item Selection */}
+            <div className="space-y-4">
+              <div>
+                <Label>Add Items to Order</Label>
+                <p className="text-sm text-muted-foreground">
+                  Select items from dropdown and set quantities and prices
+                </p>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="itemSelect">Select Item</Label>
+                  <Select onValueChange={handleAddItemFromDropdown}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select product" />
+                      <SelectValue placeholder="Choose an item to add" />
                     </SelectTrigger>
                     <SelectContent>
                       {availableItems.map((item) => (
                         <SelectItem key={item.id} value={item.id}>
-                          {item.name} ({item.volume})
+                          <div className="flex flex-col">
+                            <span className="font-medium">{item.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {item.category} • {item.volume} • ₹{item.unitPrice}/unit
+                            </span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Vendor Name - MANDATORY */}
-                <div className="space-y-2">
-                  <Label htmlFor="vendorName">Vendor Name *</Label>
-                  <div className="flex items-center space-x-1">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    <Input
-                      id="vendorName"
-                      type="text"
-                      value={vendorName}
-                      onChange={(e) => setVendorName(e.target.value)}
-                      placeholder="Enter vendor name"
-                      disabled={isPlacingOrder}
-                    />
-                  </div>
-                </div>
-
-                {/* Unit Price - MANDATORY */}
-                <div className="space-y-2">
-                  <Label htmlFor="unitPrice">Unit Price (Inclusive GST) *</Label>
-                  <div className="flex items-center space-x-1">
-                    <IndianRupee className="w-4 h-4 text-green-600" />
-                    <Input
-                      id="unitPrice"
-                      type="number"
-                      step="0.01"
-                      value={unitPrice}
-                      onChange={(e) => setUnitPrice(e.target.value)}
-                      placeholder="0.00"
-                      min="0"
-                      disabled={isPlacingOrder}
-                    />
-                  </div>
-                </div>
-
-                {/* Quantity - OPTIONAL (defaults to 1) */}
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity (Optional)</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="1"
-                    min="1"
-                    step="1"
-                    disabled={isPlacingOrder}
-                  />
-                  <p className="text-xs text-muted-foreground">Defaults to 1 if not specified</p>
-                </div>
               </div>
+            </div>
 
-              {/* Total Amount Display - Real-time calculation */}
-              {unitPrice && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Calculator className="w-4 h-4 text-green-600" />
-                      <span className="font-medium">Total Amount:</span>
-                      <span className="text-sm text-muted-foreground">
-                        ({quantity || 1} × ₹{unitPrice})
-                      </span>
+            {/* Selected Items */}
+            {selectedItems.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <Label>Order Items ({selectedItems.length})</Label>
+                    <Badge variant="outline">Total: {getTotalItems()} units</Badge>
+                  </div>
+
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="p-3 text-left">Item</th>
+                          <th className="p-3 text-left">Quantity</th>
+                          <th className="p-3 text-left">Unit Price (₹)</th>
+                          <th className="p-3 text-left">Line Total (₹)</th>
+                          <th className="p-3 text-left">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedItems.map((item) => (
+                          <tr key={item.id} className="border-t">
+                            <td className="p-3">
+                              <div>
+                                <p className="font-medium">{item.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {item.category} • {item.volume}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center space-x-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUpdateQuantity(item.id, item.requestedQuantity - 1)}
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </Button>
+                                <Input
+                                  type="number"
+                                  value={item.requestedQuantity}
+                                  onChange={(e) => handleUpdateQuantity(item.id, Number.parseInt(e.target.value) || 0)}
+                                  className="w-16 text-center"
+                                  min="1"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUpdateQuantity(item.id, item.requestedQuantity + 1)}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div>
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={item.unitPrice || 0}
+                                  onChange={(e) =>
+                                    handleUpdateUnitPrice(item.id, Number.parseFloat(e.target.value) || 0)
+                                  }
+                                  className="w-24 mb-1"
+                                  min={getPriceAdjustmentRange(item.id).min}
+                                  max={getPriceAdjustmentRange(item.id).max}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                  Range: ₹{getPriceAdjustmentRange(item.id).min.toFixed(2)} - ₹
+                                  {getPriceAdjustmentRange(item.id).max.toFixed(2)}
+                                </p>
+                              </div>
+                            </td>
+                            <td className="p-3 font-medium">₹{(item.lineTotal || 0).toFixed(2)}</td>
+                            <td className="p-3">
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRemoveItem(item.id)}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* GST Options */}
+            {selectedItems.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-4">
+                  <Label className="text-lg font-semibold">GST Options</Label>
+
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="withGst"
+                      checked={withGst}
+                      onCheckedChange={(checked) => setWithGst(checked as boolean)}
+                    />
+                    <Label htmlFor="withGst" className="text-sm font-medium">
+                      Include GST (12% tax will be applied)
+                    </Label>
+                  </div>
+
+                  {withGst && (
+                    <div>
+                      <Label htmlFor="gstNumber">GST Number *</Label>
+                      <Input
+                        id="gstNumber"
+                        value={gstNumber}
+                        onChange={(e) => setGstNumber(e.target.value)}
+                        placeholder="Enter GST number (e.g., 22AAAAA0000A1Z5)"
+                        className="max-w-md"
+                      />
                     </div>
-                    <span className="text-lg font-bold text-green-600">{formatCurrency(getCurrentTotalAmount())}</span>
-                  </div>
+                  )}
+
+                  {/* Pricing Summary */}
+                  <Card>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-sm flex items-center gap-2">
+                        <Calculator className="w-4 h-4" />
+                        Order Pricing Summary
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>Subtotal:</span>
+                          <span>₹{subtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>GST ({(taxRate * 100).toFixed(0)}%):</span>
+                          <span>₹{tax.toFixed(2)}</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between font-semibold text-lg">
+                          <span>Total:</span>
+                          <span className="text-green-600">₹{total.toFixed(2)}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {withGst ? "GST-inclusive pricing" : "GST-exclusive pricing"}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
-              )}
+              </>
+            )}
 
-              {/* GST Bill Section - OPTIONAL */}
-              <div className="space-y-3">
-                <Label>GST Bill (Optional)</Label>
-                <RadioGroup value={gstBill} onValueChange={(value: "yes" | "no") => setGstBill(value)}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="yes" id="gst-yes" />
-                    <Label htmlFor="gst-yes">Yes</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="no" id="gst-no" />
-                    <Label htmlFor="gst-no">No</Label>
-                  </div>
-                </RadioGroup>
-
-                {/* GST Number (conditional) - OPTIONAL unless GST Bill = Yes */}
-                {gstBill === "yes" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="gstNumber">GST Number *</Label>
-                    <Input
-                      id="gstNumber"
-                      value={gstNumber}
-                      onChange={(e) => setGstNumber(e.target.value)}
-                      placeholder="Enter GST number"
-                      disabled={isPlacingOrder}
-                    />
-                    <p className="text-xs text-muted-foreground">Required when GST Bill is Yes</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Field Requirements Info */}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="text-sm">
-                  <p className="font-medium text-blue-800 mb-1">Field Requirements:</p>
-                  <p className="text-blue-700">
-                    <strong>Mandatory:</strong> Product, Vendor Name, Unit Price
-                  </p>
-                  <p className="text-blue-700">
-                    <strong>Optional:</strong> Quantity (defaults to 1), GST Bill, GST Number
-                  </p>
-                </div>
-              </div>
-
-              {/* Add Item Button */}
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleAddItem}
-                  disabled={!canAddItem || isPlacingOrder}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Item to Order
-                </Button>
-              </div>
+            {/* Notes */}
+            <div>
+              <Label htmlFor="notes">Order Notes (Optional)</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add any special instructions or notes for this order..."
+                rows={3}
+              />
             </div>
-          </div>
 
-          {/* Order Items Table */}
-          {orderItems.length > 0 && (
-            <div className="space-y-4">
-              <Label className="text-lg font-semibold">Order Items</Label>
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead>S.No.</TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Vendor</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Unit Price (₹)</TableHead>
-                      <TableHead>Total Amount (₹)</TableHead>
-                      <TableHead>GST Bill</TableHead>
-                      <TableHead>GST Number</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {orderItems.map((item, index) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">{index + 1}</TableCell>
-                        <TableCell>{item.productName}</TableCell>
-                        <TableCell>{item.vendorName}</TableCell>
-                        <TableCell>{item.quantity}</TableCell>
-                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                        <TableCell className="font-medium text-green-600">{formatCurrency(item.totalAmount)}</TableCell>
-                        <TableCell>
-                          <Badge variant={item.gstBill === "yes" ? "default" : "secondary"}>
-                            {item.gstBill === "yes" ? "Yes" : "No"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{item.gstNumber || "-"}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="text-red-600 hover:text-red-700"
-                            disabled={isPlacingOrder}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+            {/* Validation Alert */}
+            {clients.length === 0 && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>No Clients Available:</strong> You need to add at least one client before creating an order.
+                  Please add a client first.
+                </AlertDescription>
+              </Alert>
+            )}
 
-              {/* Order Summary */}
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <h4 className="font-medium mb-2">Order Summary</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Total Items:</span>
-                    <p className="font-semibold">{getOrderTotals().itemCount}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Total Quantity:</span>
-                    <p className="font-semibold">{getOrderTotals().totalQuantity}</p>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Grand Total:</span>
-                    <p className="font-semibold text-green-600 text-lg">{formatCurrency(getOrderTotals().subtotal)}</p>
-                  </div>
-                </div>
-              </div>
+            {/* Submit Button */}
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting || !selectedClientId || selectedItems.length === 0}>
+                {isSubmitting
+                  ? editOrder
+                    ? "Updating..."
+                    : "Creating Order..."
+                  : editOrder
+                    ? "Update Order"
+                    : "Create Order"}
+              </Button>
             </div>
-          )}
-
-          {/* Order Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Order Notes (Optional)</Label>
-            <Textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add any special instructions or notes for this order..."
-              rows={3}
-              disabled={isPlacingOrder}
-            />
-          </div>
-
-          {/* Error/Success Messages */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {success && (
-            <Alert>
-              <AlertDescription>{success}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => handleDialogClose(false)} disabled={isPlacingOrder}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handlePlaceOrder}
-              disabled={!canPlaceOrder}
-              className={`${
-                canPlaceOrder
-                  ? "bg-yellow-600 hover:bg-yellow-700 text-white"
-                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              } transition-all duration-200`}
-            >
-              {isPlacingOrder ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Submitting Order...
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="w-4 h-4 mr-2" />
-                  Place Order
-                </>
-              )}
-            </Button>
-          </div>
-        </div>
+          </form>
+        )}
+        {/* Price Adjustment Dialog */}
+        <PriceAdjustmentDialog
+          open={showPriceAdjustment}
+          onOpenChange={(open) => {
+            setShowPriceAdjustment(open)
+            if (!open) {
+              onOpenChange(false)
+              setCreatedOrder(null)
+            }
+          }}
+          order={createdOrder}
+          onAdjustPricing={(adjustments) => {
+            if (createdOrder) {
+              adjustOrderPricing(createdOrder.id, adjustments)
+            }
+          }}
+        />
       </DialogContent>
     </Dialog>
   )
