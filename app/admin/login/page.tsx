@@ -1,5 +1,11 @@
-import { LoginForm } from "@/components/login-form"
+"use client"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 
-export default function AdminLoginPage() {
-  return <LoginForm role="admin" />
+export default function RedirectAdminLogin() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace("/login")
+  }, [router])
+  return null
 }

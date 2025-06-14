@@ -24,7 +24,7 @@ export function LoginForm({ role }: LoginFormProps) {
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(true)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  const { login, loginByName, users, autoLoginLastUser } = useAuth()
+  const { login, loginByName, users, autoLoginLastUser, user } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
@@ -35,9 +35,10 @@ export function LoginForm({ role }: LoginFormProps) {
       if (success) {
         setSuccess("Welcome back! Redirecting...")
         setTimeout(() => {
-          if (role === "admin") {
+          // Redirect based on the actual user role
+          if (user?.role === "admin") {
             router.push("/admin/dashboard")
-          } else {
+          } else if (user?.role === "salesman") {
             router.push("/salesman/dashboard")
           }
         }, 1000)
@@ -54,7 +55,7 @@ export function LoginForm({ role }: LoginFormProps) {
     }
 
     attemptAutoLogin()
-  }, [role, users, autoLoginLastUser, router])
+  }, [role, users, autoLoginLastUser, router, user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -80,11 +81,11 @@ export function LoginForm({ role }: LoginFormProps) {
 
       if (success) {
         setSuccess("Welcome back! Redirecting...")
-        // Redirect to the appropriate dashboard
+        // Redirect based on the actual user role
         setTimeout(() => {
-          if (role === "admin") {
+          if (user?.role === "admin") {
             router.push("/admin/dashboard")
-          } else {
+          } else if (user?.role === "salesman") {
             router.push("/salesman/dashboard")
           }
         }, 1000)
@@ -96,7 +97,7 @@ export function LoginForm({ role }: LoginFormProps) {
           if (salesmen.length === 0) {
             setError("No salesman accounts found. Please register first.")
           } else {
-            setError(`Salesman "${name}" not found. Available names: ${salesmen.map((s) => s.name).join(", ")}`)
+            setError(`Salesman \"${name}\" not found. Available names: ${salesmen.map((s) => s.name).join(", ")}`)
           }
         }
       }

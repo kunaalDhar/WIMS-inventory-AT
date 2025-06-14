@@ -1,8 +1,6 @@
 "use client"
 
-import React from "react"
-
-import { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useOrders } from "@/contexts/order-context"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -16,7 +14,29 @@ interface CreateClientDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-const clientMasterData = [
+interface ClientMasterData {
+  partyName: string
+  contactPerson: string
+  contactNumber: string
+  city: string
+  area: string
+  address: string
+  gstNumber: string
+  email: string
+}
+
+interface ClientFormData {
+  partyName: string
+  contactPerson: string
+  contactNumber: string
+  city: string
+  area: string
+  address: string
+  gstNumber: string
+  email: string
+}
+
+const clientMasterData: ClientMasterData[] = [
   {
     partyName: "Aashirwad Karyana Store",
     contactPerson: "Rajesh Kumar",
@@ -74,8 +94,9 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
   const { addClient, checkClientExists } = useOrders()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [duplicateError, setDuplicateError] = useState<string>("")
-  const [formData, setFormData] = useState({
+  const [duplicateError, setDuplicateError] = useState("")
+  
+  const [formData, setFormData] = useState<ClientFormData>({
     partyName: "",
     contactPerson: "",
     contactNumber: "",
@@ -86,41 +107,45 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
     email: "",
   })
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+  // Memoized duplicate checking
+  const checkForDuplicates = useCallback(() => {
+    if (!formData.partyName.trim() && !formData.email.trim()) return
+    
+    const existingClient = checkClientExists(
+      formData.partyName.trim().toLowerCase(),
+      formData.email.trim().toLowerCase()
+    )
+    
+    if (existingClient) {
+      const duplicateField = 
+        existingClient.name?.toLowerCase() === formData.partyName.trim().toLowerCase() 
+          ? "partyName" 
+          : "email"
+      setDuplicateError(
+        `A client with this ${duplicateField} already exists: ${existingClient.name}${
+          existingClient.email ? ` (${existingClient.email})` : ""
+        }`
+      )
+    } else {
+      setDuplicateError("")
+    }
+  }, [formData.partyName, formData.email, checkClientExists])
 
-    // Clear duplicate error when user starts typing
+  // Debounced duplicate checking
+  useEffect(() => {
+    const timeoutId = setTimeout(checkForDuplicates, 500)
+    return () => clearTimeout(timeoutId)
+  }, [formData.partyName, formData.email, checkForDuplicates])
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    
     if (duplicateError && (field === "partyName" || field === "email")) {
       setDuplicateError("")
     }
   }
 
-  // Check if form is valid (only Party Name is required)
   const isFormValid = formData.partyName.trim().length > 0 && !duplicateError
-
-  // Real-time duplicate checking
-  const checkForDuplicates = () => {
-    if (formData.partyName.trim() || formData.email.trim()) {
-      const existingClient = checkClientExists(formData.partyName.trim(), formData.email.trim())
-      if (existingClient) {
-        const duplicateField =
-          existingClient.name?.toLowerCase() === formData.partyName.trim().toLowerCase() ? "partyName" : "email"
-        setDuplicateError(
-          `A client with this ${duplicateField} already exists: ${existingClient.name}${
-            existingClient.email ? ` (${existingClient.email})` : ""
-          }`,
-        )
-      } else {
-        setDuplicateError("")
-      }
-    }
-  }
-
-  // Check for duplicates when name or email changes
-  React.useEffect(() => {
-    const timeoutId = setTimeout(checkForDuplicates, 500) // Debounce for 500ms
-    return () => clearTimeout(timeoutId)
-  }, [formData.partyName, formData.email])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -128,42 +153,46 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
 
     setIsSubmitting(true)
 
+    // Final validation
+    if (!formData.partyName.trim()) {
+      alert("Party Name is required")
+      setIsSubmitting(false)
+      return
+    }
+
+    // Final duplicate check
+    const existingClient = checkClientExists(
+      formData.partyName.trim().toLowerCase(),
+      formData.email.trim().toLowerCase()
+    )
+    
+    if (existingClient) {
+      setDuplicateError(
+        `Client already exists: ${existingClient.name}${
+          existingClient.email ? ` (${existingClient.email})` : ""
+        }`
+      )
+      setIsSubmitting(false)
+      return
+    }
+
     try {
-      // Final validation
-      if (!formData.partyName.trim()) {
-        alert("Party Name is required")
-        return
-      }
-
-      // Check for duplicates one more time
-      const existingClient = checkClientExists(formData.partyName.trim(), formData.email.trim())
-      if (existingClient) {
-        setDuplicateError(
-          `Client already exists: ${existingClient.name}${existingClient.email ? ` (${existingClient.email})` : ""}`,
-        )
-        return
-      }
-
-      // Add client with trimmed data
-      const newClient = addClient({
-        name: formData.partyName.trim(),
+      // Add client
+      addClient({
+        clientName: formData.partyName.trim(),
         partyName: formData.partyName.trim(),
         address: formData.address.trim(),
         city: formData.city.trim(),
         area: formData.area.trim(),
         contactPerson: formData.contactPerson.trim(),
-        phone: formData.contactNumber.trim(),
+        contactNumber: formData.contactNumber.trim(),
         gstNumber: formData.gstNumber.trim(),
         email: formData.email.trim(),
         createdBy: user.id,
       })
 
-      console.log("✅ Client created successfully:", newClient.name)
-
-      // Show success message
+      // Show success and reset form
       setShowSuccess(true)
-
-      // Reset form
       setFormData({
         partyName: "",
         contactPerson: "",
@@ -174,59 +203,60 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         gstNumber: "",
         email: "",
       })
-      setDuplicateError("")
 
-      // Close dialog after a short delay
+      // Close dialog after delay
       setTimeout(() => {
         setShowSuccess(false)
         onOpenChange(false)
       }, 2000)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error creating client:", error)
-      if (error instanceof Error) {
-        setDuplicateError(error.message)
-      } else {
-        alert("Failed to create client. Please try again.")
-      }
+      setDuplicateError(error.message || "Failed to create client. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const handlePSDClick = () => {
-    // Add all pre-populated clients to the system
-    clientMasterData.forEach((clientData) => {
-      try {
-        const existingClient = checkClientExists(clientData.partyName, clientData.email)
-        if (!existingClient && user) {
+    if (!user) {
+      alert("You must be logged in to perform this action")
+      return
+    }
+
+    let addedCount = 0
+    
+    clientMasterData.forEach(clientData => {
+      const existingClient = checkClientExists(clientData.partyName, clientData.email)
+      if (!existingClient) {
+        try {
           addClient({
-            name: clientData.partyName,
+            clientName: clientData.partyName,
             partyName: clientData.partyName,
             address: clientData.address,
             city: clientData.city,
             area: clientData.area,
             contactPerson: clientData.contactPerson,
-            phone: clientData.contactNumber,
+            contactNumber: clientData.contactNumber,
             gstNumber: clientData.gstNumber,
             email: clientData.email,
             createdBy: user.id,
           })
+          addedCount++
+        } catch (error) {
+          console.error(`Error adding client: ${clientData.partyName}`, error)
         }
-      } catch (error) {
-        console.error("Error adding pre-populated client:", error)
       }
     })
-    
-    alert(`✅ PSD Complete! ${clientMasterData.length} clients permanently saved to system.`)
+
+    alert(`✅ PSD Complete! ${addedCount} clients added to the system.`)
     onOpenChange(false)
   }
 
   const handleClose = () => {
-    if (!isSubmitting) {
-      setShowSuccess(false)
-      setDuplicateError("")
-      onOpenChange(false)
-    }
+    if (isSubmitting) return
+    setShowSuccess(false)
+    setDuplicateError("")
+    onOpenChange(false)
   }
 
   return (
@@ -245,17 +275,15 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         <div className="space-y-4 pb-4">
           {showSuccess ? (
             <div className="py-8">
-              <Alert>
+              <Alert variant="default">
                 <CheckCircle className="h-4 w-4" />
                 <AlertDescription>
-                  <strong>Success!</strong> Client has been selected successfully and is now available for creating
-                  orders.
+                  <strong>Success!</strong> Client has been created successfully and is now available for orders.
                 </AlertDescription>
               </Alert>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* PSD Button */}
               <div className="flex justify-center pb-4">
                 <Button
                   type="button"
@@ -267,7 +295,6 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                 </Button>
               </div>
 
-              {/* Duplicate Error Alert */}
               {duplicateError && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
@@ -276,7 +303,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
               )}
 
               <div className="grid grid-cols-1 gap-4">
-                {/* Party Name Dropdown */}
+                {/* Party Name */}
                 <div>
                   <Label htmlFor="partyName" className="text-sm font-medium">
                     Select Party Name <span className="text-red-500">*</span>
@@ -286,7 +313,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     value={formData.partyName}
                     onChange={(e) => {
                       const selectedParty = e.target.value
-                      const partyData = clientMasterData.find((p) => p.partyName === selectedParty)
+                      const partyData = clientMasterData.find(p => p.partyName === selectedParty)
                       if (partyData) {
                         setFormData({
                           partyName: partyData.partyName,
@@ -296,7 +323,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                           area: partyData.area,
                           address: partyData.address,
                           gstNumber: partyData.gstNumber,
-                          email: partyData.email || "",
+                          email: partyData.email,
                         })
                       } else {
                         handleInputChange("partyName", selectedParty)
@@ -304,37 +331,23 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
+                    disabled={isSubmitting}
                   >
                     <option value="">Select a party...</option>
-                    <option value="Aashirwad Karyana Store">Aashirwad Karyana Store</option>
-                    <option value="Aggarwal Grocers">Aggarwal Grocers</option>
-                    <option value="Bhatia General Store">Bhatia General Store</option>
-                    <option value="Chandigarh Super Market">Chandigarh Super Market</option>
-                    <option value="Daria Provision Store">Daria Provision Store</option>
+                    {clientMasterData.map(client => (
+                      <option key={client.partyName} value={client.partyName}>
+                        {client.partyName}
+                      </option>
+                    ))}
                     <option value="Elite Grocery Hub">Elite Grocery Hub</option>
                     <option value="Fresh Mart Chandigarh">Fresh Mart Chandigarh</option>
                     <option value="Golden Grocery Store">Golden Grocery Store</option>
                     <option value="Happy Foods Retail">Happy Foods Retail</option>
                     <option value="Indira Market Store">Indira Market Store</option>
-                    <option value="Janta Store Sector 22">Janta Store Sector 22</option>
-                    <option value="Kiran General Store">Kiran General Store</option>
-                    <option value="Lucky Provision Store">Lucky Provision Store</option>
-                    <option value="Modern Grocery Mart">Modern Grocery Mart</option>
-                    <option value="New Punjab Store">New Punjab Store</option>
-                    <option value="Om Sai Grocery">Om Sai Grocery</option>
-                    <option value="Punjab Grocery Store">Punjab Grocery Store</option>
-                    <option value="Quick Mart Chandigarh">Quick Mart Chandigarh</option>
-                    <option value="Raj Provision Store">Raj Provision Store</option>
-                    <option value="Sharma General Store">Sharma General Store</option>
-                    <option value="Tridev Grocery Store">Tridev Grocery Store</option>
-                    <option value="Unity Grocery Hub">Unity Grocery Hub</option>
-                    <option value="Vishnu General Store">Vishnu General Store</option>
-                    <option value="Welcome Grocery Store">Welcome Grocery Store</option>
-                    <option value="Xtreme Grocery Mart">Xtreme Grocery Mart</option>
                   </select>
                 </div>
 
-                {/* Contact Person Dropdown */}
+                {/* Contact Person */}
                 <div>
                   <Label htmlFor="contactPerson" className="text-sm font-medium">
                     Contact Person
@@ -344,6 +357,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     value={formData.contactPerson}
                     onChange={(e) => handleInputChange("contactPerson", e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSubmitting}
                   >
                     <option value="">Select contact person...</option>
                     <option value="Rajesh Kumar">Rajesh Kumar</option>
@@ -351,15 +365,10 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     <option value="Amit Singh">Amit Singh</option>
                     <option value="Sunita Devi">Sunita Devi</option>
                     <option value="Vikram Aggarwal">Vikram Aggarwal</option>
-                    <option value="Meera Bhatia">Meera Bhatia</option>
-                    <option value="Ravi Gupta">Ravi Gupta</option>
-                    <option value="Kavita Jain">Kavita Jain</option>
-                    <option value="Suresh Chand">Suresh Chand</option>
-                    <option value="Pooja Verma">Pooja Verma</option>
                   </select>
                 </div>
 
-                {/* Contact Number Dropdown */}
+                {/* Contact Number */}
                 <div>
                   <Label htmlFor="contactNumber" className="text-sm font-medium">
                     Contact Number
@@ -369,6 +378,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     value={formData.contactNumber}
                     onChange={(e) => handleInputChange("contactNumber", e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSubmitting}
                   >
                     <option value="">Select contact number...</option>
                     <option value="9876543210">9876543210</option>
@@ -376,15 +386,10 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                     <option value="9876543211">9876543211</option>
                     <option value="9988776656">9988776656</option>
                     <option value="9876543212">9876543212</option>
-                    <option value="9988776657">9988776657</option>
-                    <option value="9876543213">9876543213</option>
-                    <option value="9988776658">9988776658</option>
-                    <option value="9876543214">9876543214</option>
-                    <option value="9988776659">9988776659</option>
                   </select>
                 </div>
 
-                {/* City and Area Dropdowns */}
+                {/* City and Area */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="city" className="text-sm font-medium">
@@ -395,6 +400,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                       value={formData.city}
                       onChange={(e) => handleInputChange("city", e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={isSubmitting}
                     >
                       <option value="">Select city...</option>
                       <option value="Chandigarh">Chandigarh</option>
@@ -413,6 +419,7 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                       value={formData.area}
                       onChange={(e) => handleInputChange("area", e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={isSubmitting}
                     >
                       <option value="">Select area...</option>
                       <option value="Daria">Daria</option>
@@ -421,4 +428,68 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
                       <option value="Sector 34">Sector 34</option>
                       <option value="Sector 56">Sector 56</option>
                       <option value="Industrial Area">Industrial Area</option>
-                      <option value="Manimajra\">Manimajra</
+                      <option value="Manimajra">Manimajra</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div>
+                  <Label htmlFor="address" className="text-sm font-medium">
+                    Address
+                  </Label>
+                  <input
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) => handleInputChange("address", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {/* GST Number */}
+                <div>
+                  <Label htmlFor="gstNumber" className="text-sm font-medium">
+                    GST Number
+                  </Label>
+                  <input
+                    id="gstNumber"
+                    value={formData.gstNumber}
+                    onChange={(e) => handleInputChange("gstNumber", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSubmitting}
+                  />
+                </div>
+
+                {/* Email */}
+                <div>
+                  <Label htmlFor="email" className="text-sm font-medium">
+                    Email
+                  </Label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange("email", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-4">
+                <Button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={isSubmitting || !isFormValid}
+                >
+                  {isSubmitting ? "Creating..." : "Create Client"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

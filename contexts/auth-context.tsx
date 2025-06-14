@@ -30,7 +30,13 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
+  // Initialize to null/[] to avoid SSR localStorage access
+  const [user, setUser] = useState<User | null>(null)
+  const [users, setUsers] = useState<User[]>([])
+  
+  // Load user from localStorage on client only
+  useEffect(() => {
+    if (typeof window === "undefined") return
     try {
       const sessionData = localStorage.getItem("wims-session-v4")
       if (sessionData) {
@@ -38,36 +44,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check if session is still valid (7 days)
         const sessionAge = Date.now() - parsedSession.timestamp
         const maxAge = 7 * 24 * 60 * 60 * 1000 // 7 days
-
         if (sessionAge < maxAge) {
-          return parsedSession.user as User
+          setUser(parsedSession.user as User)
         } else {
-          // Session expired, clean up
           localStorage.removeItem("wims-session-v4")
         }
       }
-      return null
     } catch (error) {
       console.error("Error loading session:", error)
       localStorage.removeItem("wims-session-v4")
-      return null
     }
-  })
+  }, [])
 
-  const [users, setUsers] = useState<User[]>(() => {
+  // Load users from localStorage on client only
+  useEffect(() => {
+    if (typeof window === "undefined") return
     try {
       const savedUsers = localStorage.getItem("wims-users-v4")
       if (savedUsers) {
         const parsedUsers = JSON.parse(savedUsers)
-        return Array.isArray(parsedUsers) ? parsedUsers : []
+        setUsers(Array.isArray(parsedUsers) ? parsedUsers : [])
       }
-      return []
     } catch (error) {
       console.error("Error loading users:", error)
       localStorage.removeItem("wims-users-v4")
-      return []
+      setUsers([])
     }
-  })
+  }, [])
 
   useEffect(() => {
     // Persist user to localStorage on change

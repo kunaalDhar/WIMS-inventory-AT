@@ -10,12 +10,14 @@ export default function AdminDashboard() {
   const router = useRouter()
 
   useEffect(() => {
-    if (!isAuthenticated || !user || user.role !== "admin") {
+    if (isAuthenticated === false) {
+      router.push("/admin/login")
+    } else if (user && user.role !== "admin") {
       router.push("/admin/login")
     }
   }, [isAuthenticated, user, router])
 
-  if (!isAuthenticated || !user) {
+  if (isAuthenticated === false || user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -26,7 +28,7 @@ export default function AdminDashboard() {
     )
   }
 
-  if (user.role !== "admin") {
+  if (user && user.role !== "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

@@ -1,11 +1,11 @@
-import { LoginForm } from "@/components/login-form"
-import { SalesmanLoginHeader } from "@/components/salesman/salesman-login-header"
+"use client"
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
 
-export default function SalesmanLoginPage() {
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <SalesmanLoginHeader />
-      <LoginForm role="salesman" />
-    </div>
-  )
+export default function RedirectSalesmanLogin() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace("/login")
+  }, [router])
+  return null
 }

@@ -15,28 +15,42 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Plus, Users, Edit, Trash2 } from "lucide-react"
+import type { Client } from "@/contexts/order-context"
+
+interface ClientFormData {
+  clientName: string
+  email: string
+  contactNumber: string
+  address: string
+  contactPerson: string
+  gstNumber: string
+  city: string
+  area: string
+}
 
 export function ClientsPanel() {
   const { clients, addClient, updateClient, deleteClient } = useOrders()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-  const [editingClient, setEditingClient] = useState(null)
-  const [formData, setFormData] = useState({
-    name: "",
+  const [editingClient, setEditingClient] = useState<Client | null>(null)
+  const [formData, setFormData] = useState<ClientFormData>({
+    clientName: "",
     email: "",
-    phone: "",
+    contactNumber: "",
     address: "",
     contactPerson: "",
     gstNumber: "",
+    city: "",
+    area: "",
   })
 
   // Check if form is valid (only Client Name is required)
-  const isFormValid = formData.name.trim().length > 0
+  const isFormValid = formData.clientName.trim().length > 0
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     // Validate required field
-    if (!formData.name.trim()) {
+    if (!formData.clientName.trim()) {
       alert("Client Name is required")
       return
     }
@@ -44,51 +58,62 @@ export function ClientsPanel() {
     if (editingClient) {
       updateClient(editingClient.id, {
         ...formData,
-        name: formData.name.trim(),
+        clientName: formData.clientName.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        contactNumber: formData.contactNumber.trim(),
         address: formData.address.trim(),
         contactPerson: formData.contactPerson.trim(),
         gstNumber: formData.gstNumber.trim(),
+        city: formData.city.trim(),
+        area: formData.area.trim(),
+        partyName: formData.clientName.trim(),
       })
       setEditingClient(null)
     } else {
       addClient({
         ...formData,
-        name: formData.name.trim(),
+        clientName: formData.clientName.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim(),
+        contactNumber: formData.contactNumber.trim(),
         address: formData.address.trim(),
         contactPerson: formData.contactPerson.trim(),
         gstNumber: formData.gstNumber.trim(),
+        city: formData.city.trim(),
+        area: formData.area.trim(),
+        partyName: formData.clientName.trim(), // for compatibility
+        createdBy: "admin", // or get from context if available
       })
       setIsAddDialogOpen(false)
     }
 
     // Reset form
     setFormData({
-      name: "",
+      clientName: "",
       email: "",
-      phone: "",
+      contactNumber: "",
       address: "",
       contactPerson: "",
       gstNumber: "",
+      city: "",
+      area: "",
     })
   }
 
-  const handleEdit = (client) => {
+  const handleEdit = (client: Client) => {
     setEditingClient(client)
     setFormData({
-      name: client.name || "",
+      clientName: client.clientName || client.name || "",
       email: client.email || "",
-      phone: client.phone || "",
+      contactNumber: client.contactNumber || client.phone || "",
       address: client.address || "",
       contactPerson: client.contactPerson || "",
       gstNumber: client.gstNumber || "",
+      city: client.city || "",
+      area: client.area || "",
     })
   }
 
-  const handleDelete = (clientId) => {
+  const handleDelete = (clientId: string) => {
     if (confirm("Are you sure you want to delete this client?")) {
       deleteClient(clientId)
     }
@@ -96,12 +121,14 @@ export function ClientsPanel() {
 
   const resetForm = () => {
     setFormData({
-      name: "",
+      clientName: "",
       email: "",
-      phone: "",
+      contactNumber: "",
       address: "",
       contactPerson: "",
       gstNumber: "",
+      city: "",
+      area: "",
     })
   }
 
@@ -139,15 +166,15 @@ export function ClientsPanel() {
                 </Label>
                 <Input
                   id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                  value={formData.clientName}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, clientName: e.target.value }))}
                   placeholder="Enter client company name"
                   className={`${
-                    formData.name.trim().length === 0 ? "border-red-300 focus:border-red-500" : "border-green-300"
+                    formData.clientName.trim().length === 0 ? "border-red-300 focus:border-red-500" : "border-green-300"
                   }`}
                   required
                 />
-                {formData.name.trim().length === 0 && (
+                {formData.clientName.trim().length === 0 && (
                   <p className="text-xs text-red-500 mt-1">Client Name is required</p>
                 )}
               </div>
@@ -183,8 +210,8 @@ export function ClientsPanel() {
                 </Label>
                 <Input
                   id="phone"
-                  value={formData.phone}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                  value={formData.contactNumber}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, contactNumber: e.target.value }))}
                   placeholder="+91 98765 43210"
                 />
               </div>
@@ -253,11 +280,11 @@ export function ClientsPanel() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>{client.name}</CardTitle>
+                  <CardTitle>{client.clientName || client.name}</CardTitle>
                   <CardDescription>
                     {client.contactPerson && `Contact: ${client.contactPerson}`}
                     {client.email && ` • ${client.email}`}
-                    {client.phone && ` • ${client.phone}`}
+                    {(client.contactNumber || client.phone) && ` • ${client.contactNumber || client.phone}`}
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
@@ -290,17 +317,17 @@ export function ClientsPanel() {
                           </Label>
                           <Input
                             id="edit-name"
-                            value={formData.name}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                            value={formData.clientName}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, clientName: e.target.value }))}
                             placeholder="Enter client company name"
                             className={`${
-                              formData.name.trim().length === 0
+                              formData.clientName.trim().length === 0
                                 ? "border-red-300 focus:border-red-500"
                                 : "border-green-300"
                             }`}
                             required
                           />
-                          {formData.name.trim().length === 0 && (
+                          {formData.clientName.trim().length === 0 && (
                             <p className="text-xs text-red-500 mt-1">Client Name is required</p>
                           )}
                         </div>
@@ -336,8 +363,8 @@ export function ClientsPanel() {
                           </Label>
                           <Input
                             id="edit-phone"
-                            value={formData.phone}
-                            onChange={(e) => setFormData((prev) => ({ ...prev, phone: e.target.value }))}
+                            value={formData.contactNumber}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, contactNumber: e.target.value }))}
                             placeholder="+91 98765 43210"
                           />
                         </div>

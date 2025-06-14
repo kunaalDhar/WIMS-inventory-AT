@@ -21,7 +21,7 @@ interface OrderItem {
   lineTotal?: number
 }
 
-interface Client {
+export interface Client {
   id: string
   partyName: string // Main field from 'Party Name' column
   clientName: string // Extracted clean name for display
