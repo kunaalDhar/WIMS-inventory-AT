@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertTriangle, CheckCircle, User, Mail, KeyRound, Shield, Lock } from "lucide-react"
+import { AlertTriangle, CheckCircle, User, Mail, KeyRound } from "lucide-react"
 
 interface LoginFormProps {
   role: "admin" | "salesman"
@@ -66,7 +66,7 @@ export function LoginForm({ role }: LoginFormProps) {
       let success = false
 
       if (role === "admin") {
-        // Admin uses secure email/password
+        // Admin still uses email/password
         success = await login(email, password, role)
       } else {
         // Salesman uses name-only login
@@ -90,7 +90,7 @@ export function LoginForm({ role }: LoginFormProps) {
         }, 1000)
       } else {
         if (role === "admin") {
-          setError("Access Denied! Only authorized admin credentials are accepted.")
+          setError("Invalid email or password. Please check your credentials.")
         } else {
           const salesmen = users.filter((u) => u.role === "salesman")
           if (salesmen.length === 0) {
@@ -122,174 +122,116 @@ export function LoginForm({ role }: LoginFormProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-4">
-      <Card
-        className={`w-full max-w-md mx-auto shadow-2xl border-0 ${role === "admin" ? "bg-gradient-to-br from-red-50 to-orange-50" : "bg-white/80"} backdrop-blur-sm`}
-      >
-        <CardHeader className="text-center pb-6">
-          <div
-            className={`mx-auto w-16 h-16 ${role === "admin" ? "bg-gradient-to-r from-red-500 to-orange-600" : "bg-gradient-to-r from-blue-500 to-indigo-600"} rounded-full flex items-center justify-center mb-4 shadow-lg`}
-          >
-            {role === "admin" ? <Shield className="h-8 w-8 text-white" /> : <User className="h-8 w-8 text-white" />}
-          </div>
-          <CardTitle
-            className={`text-3xl font-bold ${role === "admin" ? "bg-gradient-to-r from-red-600 to-orange-600" : "bg-gradient-to-r from-blue-600 to-indigo-600"} bg-clip-text text-transparent flex items-center justify-center gap-2`}
-          >
-            {role === "admin" ? (
-              <>
-                <Lock className="h-6 w-6 text-red-600" />
-                Secure Admin Access
-              </>
-            ) : (
-              <>
-                <User className="h-5 w-5 text-blue-600" />
-                Salesman Login
-              </>
-            )}
-          </CardTitle>
-          <CardDescription className="text-lg text-gray-600 mt-2">
-            {role === "admin"
-              ? "🔒 Authorized Personnel Only - Secure Login Required"
-              : "Enter your name to access the salesman dashboard"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <Alert variant="destructive" className="border-red-300 bg-red-50">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="text-red-800 font-medium">{error}</AlertDescription>
-              </Alert>
-            )}
+    <Card className="w-full max-w-md mx-auto">
+      <CardHeader>
+        <CardTitle className="text-2xl flex items-center gap-2">
+          {role === "admin" ? (
+            <>
+              <KeyRound className="h-5 w-5 text-primary" />
+              Admin Login
+            </>
+          ) : (
+            <>
+              <User className="h-5 w-5 text-primary" />
+              Salesman Login
+            </>
+          )}
+        </CardTitle>
+        <CardDescription>
+          {role === "admin"
+            ? "Enter your credentials to access the admin dashboard"
+            : "Enter your name to access the salesman dashboard"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-            {success && (
-              <Alert className="bg-green-50 text-green-800 border-green-200">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800 font-medium">{success}</AlertDescription>
-              </Alert>
-            )}
+          {success && (
+            <Alert className="bg-green-50 text-green-800 border-green-200">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription>{success}</AlertDescription>
+            </Alert>
+          )}
 
-            {role === "admin" ? (
-              <>
-                {/* Secure Admin Login */}
-                <Card className="border-2 border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                        <Mail className="h-4 w-4 text-white" />
-                      </div>
-                      <Label htmlFor="email" className="text-lg font-semibold text-red-800 flex items-center gap-2">
-                        Admin Email
-                        <Shield className="h-4 w-4 text-red-600" />
-                      </Label>
-                    </div>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="Enter authorized admin email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="border-red-300 focus:border-red-500 focus:ring-red-500 text-lg py-3"
-                    />
-                    <p className="text-sm text-red-600 mt-2 font-medium">🔐 Only authorized admin email accepted</p>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2 border-red-200 bg-gradient-to-r from-red-50 to-orange-50">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                        <KeyRound className="h-4 w-4 text-white" />
-                      </div>
-                      <Label htmlFor="password" className="text-lg font-semibold text-red-800 flex items-center gap-2">
-                        Secure Password
-                        <Lock className="h-4 w-4 text-red-600" />
-                      </Label>
-                    </div>
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Enter secure admin password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="border-red-300 focus:border-red-500 focus:ring-red-500 text-lg py-3"
-                    />
-                    <p className="text-sm text-red-600 mt-2 font-medium">🛡️ High-security authentication required</p>
-                  </CardContent>
-                </Card>
-
-                {/* Security Notice */}
-                <Alert className="bg-yellow-50 border-yellow-200">
-                  <Shield className="h-4 w-4 text-yellow-600" />
-                  <AlertDescription className="text-yellow-800 font-medium">
-                    <strong>Security Notice:</strong> This is a secure admin portal. Only pre-authorized credentials are
-                    accepted. Unauthorized access attempts are logged.
-                  </AlertDescription>
-                </Alert>
-              </>
-            ) : (
+          {role === "admin" ? (
+            <>
               <div className="space-y-2">
-                <Label htmlFor="name" className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  Salesman Name
+                <Label htmlFor="email" className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  Email
                 </Label>
                 <Input
-                  id="name"
-                  type="text"
-                  placeholder="Enter your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  id="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
-            )}
 
-            <Button
-              type="submit"
-              className={`w-full py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 ${
-                role === "admin"
-                  ? "bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700"
-                  : "bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
-              }`}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  {role === "admin" ? "Authenticating..." : "Logging in..."}
-                </div>
-              ) : (
-                <>
-                  {role === "admin" ? (
-                    <>
-                      <Shield className="h-5 w-5 mr-2" />
-                      Secure Admin Login
-                    </>
-                  ) : (
-                    "Login"
-                  )}
-                </>
-              )}
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t bg-gray-50/50 p-4">
-          <p className="text-sm text-muted-foreground">
-            {role === "admin" ? (
-              <span className="text-red-600 font-medium">🔒 Secure Admin Portal - Authorized Access Only</span>
-            ) : (
-              <>
-                First time here?{" "}
-                <a href={`/${role}/signup`} className="text-primary hover:underline">
-                  Register as Salesman
-                </a>
-              </>
-            )}
-          </p>
-        </CardFooter>
-      </Card>
-    </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-muted-foreground" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="name" className="flex items-center gap-2">
+                <User className="h-4 w-4 text-muted-foreground" />
+                Salesman Name
+              </Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Enter your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+          )}
+
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? "Logging in..." : "Login"}
+          </Button>
+        </form>
+      </CardContent>
+      <CardFooter className="flex justify-center border-t p-4">
+        <p className="text-sm text-muted-foreground">
+          {role === "admin" ? (
+            <>
+              Don&apos;t have an account?{" "}
+              <a href={`/${role}/signup`} className="text-primary hover:underline">
+                Sign up
+              </a>
+            </>
+          ) : (
+            <>
+              First time here?{" "}
+              <a href={`/${role}/signup`} className="text-primary hover:underline">
+                Register as Salesman
+              </a>
+            </>
+          )}
+        </p>
+      </CardFooter>
+    </Card>
   )
 }

@@ -1667,16 +1667,7 @@ export function ModernAdminDashboard() {
                 System Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  logout()
-                  // Force page reload to ensure clean state
-                  setTimeout(() => {
-                    window.location.reload()
-                  }, 100)
-                }}
-                className="text-red-600"
-              >
+              <DropdownMenuItem onClick={logout} className="text-red-600">
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign Out
               </DropdownMenuItem>

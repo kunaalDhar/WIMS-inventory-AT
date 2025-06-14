@@ -99,81 +99,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string, role: "admin" | "salesman"): Promise<boolean> => {
     try {
-      if (role === "admin") {
-        // Secure admin login - only allow specific credentials
-        if (email === "admin@ekta.com" && password === "admin1300") {
-          const userData: User = {
-            id: "admin-ekta-secure",
-            name: "Ekta Admin",
-            email: "admin@ekta.com",
-            phone: "+91-1300-ADMIN",
-            role: "admin",
-          }
+      // Check against stored users first
+      const storedUser = users.find((u) => u.email === email && u.role === role)
 
-          setUser(userData)
+      if (storedUser) {
+        // In a real app, you'd verify the password hash
+        // For demo purposes, we'll accept any password for stored users
+        const userData: User = storedUser
+        setUser(userData)
 
-          const sessionData = {
-            user: userData,
-            timestamp: Date.now(),
-          }
-
-          try {
-            localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
-          } catch (error) {
-            console.error("Error saving session:", error)
-          }
-          return true
-        } else {
-          // Invalid admin credentials
-          return false
+        const sessionData = {
+          user: userData,
+          timestamp: Date.now(),
         }
+
+        try {
+          localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
+        } catch (error) {
+          console.error("Error saving session:", error)
+        }
+        return true
       }
 
-      // For salesman role, check stored users first
-      if (role === "salesman") {
-        const storedUser = users.find((u) => u.email === email && u.role === role)
-
-        if (storedUser) {
-          const userData: User = storedUser
-          setUser(userData)
-
-          const sessionData = {
-            user: userData,
-            timestamp: Date.now(),
-          }
-
-          try {
-            localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
-          } catch (error) {
-            console.error("Error saving session:", error)
-          }
-          return true
+      // Fallback to default credentials for demo
+      if (
+        (role === "admin" && email === "admin@wims.com" && password === "admin123") ||
+        (role === "salesman" && email === "salesman@wims.com" && password === "sales123")
+      ) {
+        const userData: User = {
+          id: role === "admin" ? "admin-1" : "salesman-1",
+          name: role === "admin" ? "Admin User" : "Sales User",
+          email,
+          phone: role === "admin" ? "+1234567890" : "+0987654321",
+          role,
         }
 
-        // Fallback to default salesman for demo
-        if (email === "salesman@wims.com" && password === "sales123") {
-          const userData: User = {
-            id: "salesman-1",
-            name: "Sales User",
-            email,
-            phone: "+0987654321",
-            role: "salesman",
-          }
+        setUser(userData)
 
-          setUser(userData)
-
-          const sessionData = {
-            user: userData,
-            timestamp: Date.now(),
-          }
-
-          try {
-            localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
-          } catch (error) {
-            console.error("Error saving session:", error)
-          }
-          return true
+        const sessionData = {
+          user: userData,
+          timestamp: Date.now(),
         }
+
+        try {
+          localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
+        } catch (error) {
+          console.error("Error saving session:", error)
+        }
+        return true
       }
 
       // Invalid credentials
@@ -294,11 +267,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.removeItem("wims-session-v4")
     } catch (error) {
       console.error("Error during logout:", error)
-    }
-
-    // Redirect to homepage after logout
-    if (typeof window !== "undefined") {
-      window.location.href = "/"
     }
   }
 

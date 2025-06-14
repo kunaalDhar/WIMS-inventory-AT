@@ -33,7 +33,6 @@ import {
   Eye,
   Calendar,
   MapPin,
-  LogOut,
 } from "lucide-react"
 
 // Peaceful girl voice welcome
@@ -72,7 +71,7 @@ const speakPeacefulWelcome = (userName: string, userRole: string) => {
 }
 
 export function SalesmanDashboardContent() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const {
     orders,
     clients,
@@ -356,20 +355,6 @@ export function SalesmanDashboardContent() {
               >
                 <User className="w-4 h-4 mr-2" />
                 Admin Access
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  logout()
-                  setTimeout(() => {
-                    window.location.href = "/"
-                  }, 100)
-                }}
-                className="bg-red-800 border-red-600 text-red-100 hover:bg-red-700"
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
               </Button>
             </div>
           </div>
