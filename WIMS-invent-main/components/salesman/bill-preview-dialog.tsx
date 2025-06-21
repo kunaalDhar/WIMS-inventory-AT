@@ -6,12 +6,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { FileText, Download, Printer, CheckCircle } from "lucide-react"
+import type { Order, OrderItem, Bill } from "@/contexts/order-context"
 
 interface BillPreviewDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  bill: any
-  order: any
+  bill: Bill
+  order: Order
 }
 
 export function BillPreviewDialog({ open, onOpenChange, bill, order }: BillPreviewDialogProps) {
@@ -27,44 +28,49 @@ export function BillPreviewDialog({ open, onOpenChange, bill, order }: BillPrevi
 
   const handlePrint = () => {
     const printContent = document.getElementById("bill-content")
-    if (printContent) {
-      const printWindow = window.open("", "_blank")
-      if (printWindow) {
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Invoice - ${bill.orderNumber}</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .company-name { font-size: 24px; font-weight: bold; color: #2563eb; }
-                .invoice-title { font-size: 20px; margin: 10px 0; }
-                .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
-                .details-section { border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; }
-                .details-title { font-weight: bold; margin-bottom: 10px; color: #374151; }
-                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-                th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; }
-                th { background-color: #f9fafb; font-weight: bold; }
-                .text-right { text-align: right; }
-                .total-row { background-color: #f0f9ff; font-weight: bold; }
-                .gst-badge { background-color: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-                .footer { margin-top: 30px; text-align: center; color: #6b7280; font-size: 14px; }
-              </style>
-            </head>
-            <body>
-              ${printContent.innerHTML}
-            </body>
-          </html>
-        `)
-        printWindow.document.close()
-        printWindow.print()
-      }
+    if (!printContent) return
+
+    const printWindow = window.open("", "_blank")
+    if (!printWindow) {
+      console.error("Failed to open print window")
+      return
     }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Invoice - ${bill.orderNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .company-name { font-size: 24px; font-weight: bold; color: #2563eb; }
+            .invoice-title { font-size: 20px; margin: 10px 0; }
+            .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+            .details-section { border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; }
+            .details-title { font-weight: bold; margin-bottom: 10px; color: #374151; }
+            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+            th, td { border: 1px solid #e5e7eb; padding: 12px; text-align: left; }
+            th { background-color: #f9fafb; font-weight: bold; }
+            .text-right { text-align: right; }
+            .total-row { background-color: #f0f9ff; font-weight: bold; }
+            .gst-badge { background-color: #10b981; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+            .footer { margin-top: 30px; text-align: center; color: #6b7280; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.print()
   }
 
   const handleDownload = () => {
     const billContent = document.getElementById("bill-content")
-    if (billContent) {
+    if (!billContent) return
+
+    try {
       const blob = new Blob([billContent.innerHTML], { type: "text/html" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -74,6 +80,8 @@ export function BillPreviewDialog({ open, onOpenChange, bill, order }: BillPrevi
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Failed to download bill:", error)
     }
   }
 
@@ -163,25 +171,34 @@ export function BillPreviewDialog({ open, onOpenChange, bill, order }: BillPrevi
                     </tr>
                   </thead>
                   <tbody>
-                    {bill.items.map((item: any, index: number) => (
-                      <tr key={index}>
-                        <td className="border border-gray-300 p-3">
-                          <div>
-                            <p className="font-medium">{item.name}</p>
-                            <p className="text-sm text-gray-600">
-                              {item.category} • {item.volume} • {item.bottlesPerCase} bottles/case
-                            </p>
-                          </div>
-                        </td>
-                        <td className="border border-gray-300 p-3 text-center">
-                          {item.requestedQuantity} {item.unit}
-                        </td>
-                        <td className="border border-gray-300 p-3 text-right">{formatCurrency(item.unitPrice || 0)}</td>
-                        <td className="border border-gray-300 p-3 text-right font-medium">
-                          {formatCurrency((item.unitPrice || 0) * item.requestedQuantity)}
-                        </td>
-                      </tr>
-                    ))}
+                    {bill.items.map((item: OrderItem, index: number) => {
+                      const unitPrice = item.unitPrice || 0
+                      const lineTotal = unitPrice * item.requestedQuantity
+
+                      return (
+                        <tr key={item.id || index}>
+                          <td className="border border-gray-300 p-3">
+                            <div>
+                              <p className="font-medium">{item.name}</p>
+                              <p className="text-sm text-gray-600">
+                                {[item.category, item.volume, `${item.bottlesPerCase} bottles/case`]
+                                  .filter(Boolean)
+                                  .join(" • ")}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="border border-gray-300 p-3 text-center">
+                            {item.requestedQuantity} {item.unit}
+                          </td>
+                          <td className="border border-gray-300 p-3 text-right">
+                            {formatCurrency(unitPrice)}
+                          </td>
+                          <td className="border border-gray-300 p-3 text-right font-medium">
+                            {formatCurrency(lineTotal)}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

@@ -1,11 +1,6 @@
 "use client"
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { LoginForm } from "@/components/login-form"
 
-export default function RedirectSalesmanLogin() {
-  const router = useRouter()
-  useEffect(() => {
-    router.replace("/login")
-  }, [router])
-  return null
+export default function SalesmanLoginPage() {
+  return <LoginForm role="salesman" />
 }

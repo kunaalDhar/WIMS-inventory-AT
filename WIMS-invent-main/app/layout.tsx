@@ -5,6 +5,7 @@ import "./globals.css"
 import { AuthProvider } from "@/contexts/auth-context"
 import { OrderProvider } from "@/contexts/order-context"
 import { InventoryProvider } from "@/contexts/inventory-context"
+import { AdminPermissionProvider } from "@/contexts/admin-permission-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -23,9 +24,11 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          <InventoryProvider>
-            <OrderProvider>{children}</OrderProvider>
-          </InventoryProvider>
+          <AdminPermissionProvider>
+            <InventoryProvider>
+              <OrderProvider>{children}</OrderProvider>
+            </InventoryProvider>
+          </AdminPermissionProvider>
         </AuthProvider>
       </body>
     </html>

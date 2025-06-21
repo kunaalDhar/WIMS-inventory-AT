@@ -47,9 +47,15 @@ export function SignupForm({ role }: SignupFormProps) {
           return
         }
       } else {
-        // For salesman, only name is required
-        if (!name.trim()) {
-          setError("Name is required")
+        // For salesman, name, email, and phone are required
+        if (!name.trim() || !email.trim() || !phone.trim()) {
+          setError("Name, email, and phone are required for salesman registration")
+          setIsSubmitting(false)
+          return
+        }
+        // Basic email format check
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
+          setError("Please enter a valid email address")
           setIsSubmitting(false)
           return
         }
@@ -81,38 +87,29 @@ export function SignupForm({ role }: SignupFormProps) {
           email: email.trim() || `${name.toLowerCase().replace(/\s+/g, ".")}@wims.com`,
           phone: phone.trim(),
           role,
+          ...(role === "salesman" ? { isApproved: false } : {}),
         },
         password,
       )
 
-      setSuccess(`${role === "admin" ? "Admin" : "Salesman"} account created successfully! Logging you in...`)
-
-      // Auto-login the new user
-      setTimeout(async () => {
-        try {
-          let loginSuccess = false
-
-          if (role === "salesman") {
-            loginSuccess = await loginByName(name.trim())
-          } else {
-            loginSuccess = await login(email.trim(), password, role)
-          }
-
-          if (loginSuccess) {
-            // Redirect to appropriate dashboard
-            if (role === "admin") {
+      if (role === "admin") {
+        setSuccess("Admin account created successfully! Logging you in...")
+        setTimeout(async () => {
+          try {
+            const loginSuccess = await login(email.trim(), password, role)
+            if (loginSuccess) {
               router.push("/admin/dashboard")
             } else {
-              router.push("/salesman/dashboard")
+              setError("Account created but auto-login failed. Please login manually.")
             }
-          } else {
+          } catch (error) {
+            console.error("Auto-login error:", error)
             setError("Account created but auto-login failed. Please login manually.")
           }
-        } catch (error) {
-          console.error("Auto-login error:", error)
-          setError("Account created but auto-login failed. Please login manually.")
-        }
-      }, 1000)
+        }, 1000)
+      } else {
+        setSuccess("Account created! Pending admin approval. Please wait for approval before logging in.")
+      }
     } catch (error: any) {
       console.error("Signup error:", error)
       setError(error.message || "An error occurred during signup")
@@ -173,6 +170,7 @@ export function SignupForm({ role }: SignupFormProps) {
           email,
           phone,
           role,
+          ...(role === "salesman" ? { isApproved: false } : {}),
         },
         password,
       )
@@ -223,6 +221,9 @@ export function SignupForm({ role }: SignupFormProps) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+      <div style={{position: 'absolute', top: 10, left: 10, zIndex: 1000, background: '#fffbe6', color: '#b45309', padding: '8px 16px', borderRadius: 8, fontWeight: 'bold', border: '2px solid #fbbf24'}}>
+        DEBUG: {role === "admin" ? "ADMIN SIGNUP FORM" : "SALESMAN SIGNUP FORM"}
+      </div>
       <Card className="w-full max-w-lg mx-auto shadow-2xl border-0 bg-white/80 backdrop-blur-sm">
         <CardHeader className="text-center pb-8">
           <div className="mx-auto w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mb-4">
@@ -234,7 +235,7 @@ export function SignupForm({ role }: SignupFormProps) {
           <CardDescription className="text-lg text-gray-600 mt-2">
             {role === "admin"
               ? "Create an admin account to manage the system"
-              : "Join our sales team - only your name is required!"}
+              : "Join our sales team - name, email, and phone are required!"}
           </CardDescription>
         </CardHeader>
 
@@ -388,7 +389,7 @@ export function SignupForm({ role }: SignupFormProps) {
             </Card>
 
             {/* Password Fields - Only for Admin */}
-            {role === "admin" && (
+            {role === "admin" ? (
               <>
                 <Card className="border-2 border-red-200 bg-gradient-to-r from-red-50 to-pink-50">
                   <CardContent className="p-4">
@@ -440,6 +441,53 @@ export function SignupForm({ role }: SignupFormProps) {
                     <p className="text-sm text-red-600 mt-2 font-medium">✓ Must match your password</p>
                   </CardContent>
                 </Card>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword" className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    Confirm Password
+                  </Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                  />
+                </div>
               </>
             )}
 

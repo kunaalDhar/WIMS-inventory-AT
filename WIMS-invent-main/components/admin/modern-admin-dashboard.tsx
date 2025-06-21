@@ -55,8 +55,10 @@ import {
   LogOut,
   UserCircle,
   Star,
+  Shield,
 } from "lucide-react"
 import { OrderPricingPanel } from "@/components/admin/order-pricing-panel"
+import { PermissionRequestsPanel } from "@/components/admin/permission-requests-panel"
 
 interface SidebarItem {
   id: string
@@ -71,6 +73,11 @@ const sidebarItems: SidebarItem[] = [
     id: "home",
     label: "Dashboard",
     icon: Home,
+  },
+  {
+    id: "permissions",
+    label: "Permissions",
+    icon: Shield,
   },
   {
     id: "orders",
@@ -161,9 +168,7 @@ const speakPeacefulWelcome = (userName: string) => {
           voice.name.toLowerCase().includes("karen") ||
           voice.name.toLowerCase().includes("susan") ||
           voice.name.toLowerCase().includes("zira"),
-      ) ||
-      voices.find((voice) => voice.gender === "female") ||
-      voices[0]
+      ) || voices[0]
 
     if (femaleVoice) {
       utterance.voice = femaleVoice
@@ -174,7 +179,7 @@ const speakPeacefulWelcome = (userName: string) => {
 }
 
 export function ModernAdminDashboard() {
-  const { user, logout, users } = useAuth()
+  const { user, logout, users, setUsers } = useAuth()
   const { orders = [], clients = [], bills = [], isDataLoaded, refreshData } = useOrders()
   const { inventory = [], getInventorySummary, refreshInventory } = useInventory()
 
@@ -388,333 +393,6 @@ export function ModernAdminDashboard() {
       <Badge variant={config.variant} className={config.color}>
         {status.replace("_", " ").toUpperCase()}
       </Badge>
-    )
-  }
-
-  // Real-time Orders Panel
-  const renderOrdersPanel = () => <OrderPricingPanel />
-
-  // Real-time Inventory Panel
-  const renderInventoryPanel = () => {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">Inventory Management</h2>
-            <p className="text-gray-600">Real-time stock monitoring and management</p>
-          </div>
-          <Button onClick={handleRefresh} disabled={isRefreshing}>
-            {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh Inventory
-          </Button>
-        </div>
-
-        {/* Inventory Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-700 font-medium">Total Items</p>
-                <p className="text-3xl font-bold text-blue-900">{stats.totalItems}</p>
-                <p className="text-xs text-blue-600 mt-1">Inventory products</p>
-              </div>
-              <Package2 className="w-8 h-8 text-blue-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700 font-medium">In Stock</p>
-                <p className="text-3xl font-bold text-green-900">{stats.inStockItems}</p>
-                <p className="text-xs text-green-600 mt-1">Available items</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-orange-700 font-medium">Low Stock</p>
-                <p className="text-3xl font-bold text-orange-900">{stats.lowStockItems}</p>
-                <p className="text-xs text-orange-600 mt-1">Need reorder</p>
-              </div>
-              <AlertTriangle className="w-8 h-8 text-orange-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-red-700 font-medium">Out of Stock</p>
-                <p className="text-3xl font-bold text-red-900">{stats.outOfStockItems}</p>
-                <p className="text-xs text-red-600 mt-1">Urgent restock</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </Card>
-        </div>
-
-        {/* Inventory Items Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Inventory Items ({inventory.length})</CardTitle>
-            <CardDescription>Real-time inventory data</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Item Name</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Current Stock</TableHead>
-                    <TableHead>Min Stock</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {inventory.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium">{item.name}</TableCell>
-                      <TableCell>{item.category}</TableCell>
-                      <TableCell>{item.currentStock}</TableCell>
-                      <TableCell>{item.minStock}</TableCell>
-                      <TableCell>{getStatusBadge(item.status)}</TableCell>
-                      <TableCell>{formatCurrency(item.totalValue)}</TableCell>
-                      <TableCell>{new Date(item.lastUpdated).toLocaleDateString()}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Real-time Clients Panel
-  const renderClientsPanel = () => {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">Client Management</h2>
-            <p className="text-gray-600">Real-time client data and analytics</p>
-          </div>
-          <Button onClick={handleRefresh} disabled={isRefreshing}>
-            {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh Clients
-          </Button>
-        </div>
-
-        {/* Client Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-700 font-medium">Total Clients</p>
-                <p className="text-3xl font-bold text-blue-900">{stats.totalClients}</p>
-                <p className="text-xs text-blue-600 mt-1">Registered clients</p>
-              </div>
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700 font-medium">Active Clients</p>
-                <p className="text-3xl font-bold text-green-900">{stats.activeClients}</p>
-                <p className="text-xs text-green-600 mt-1">With orders</p>
-              </div>
-              <UserCheck className="w-8 h-8 text-green-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-700 font-medium">Inactive Clients</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.inactiveClients}</p>
-                <p className="text-xs text-gray-600 mt-1">No orders yet</p>
-              </div>
-              <UserX className="w-8 h-8 text-gray-600" />
-            </div>
-          </Card>
-        </div>
-
-        {/* Clients Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>All Clients ({clients.length})</CardTitle>
-            <CardDescription>Real-time client database</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Client Name</TableHead>
-                    <TableHead>Contact Person</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>City</TableHead>
-                    <TableHead>Orders</TableHead>
-                    <TableHead>Last Order</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {clients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell className="font-medium">{client.partyName || client.name}</TableCell>
-                      <TableCell>{client.contactPerson}</TableCell>
-                      <TableCell>{client.contactNumber || client.phone}</TableCell>
-                      <TableCell>{client.city}</TableCell>
-                      <TableCell>{client.orderCount || 0}</TableCell>
-                      <TableCell>
-                        {client.lastUsed ? new Date(client.lastUsed).toLocaleDateString() : "Never"}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Real-time Bills Panel
-  const renderBillsPanel = () => {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-900">Bills Management</h2>
-            <p className="text-gray-600">Real-time billing and invoice tracking</p>
-          </div>
-          <Button onClick={handleRefresh} disabled={isRefreshing}>
-            {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh Bills
-          </Button>
-        </div>
-
-        {/* Bill Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-blue-700 font-medium">Total Bills</p>
-                <p className="text-3xl font-bold text-blue-900">{stats.totalBills}</p>
-                <p className="text-xs text-blue-600 mt-1">All generated bills</p>
-              </div>
-              <Receipt className="w-8 h-8 text-blue-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-yellow-700 font-medium">Generated</p>
-                <p className="text-3xl font-bold text-yellow-900">{stats.generatedBills}</p>
-                <p className="text-xs text-yellow-600 mt-1">Awaiting verification</p>
-              </div>
-              <FileText className="w-8 h-8 text-yellow-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-green-700 font-medium">Processed</p>
-                <p className="text-3xl font-bold text-green-900">{stats.processedBills}</p>
-                <p className="text-xs text-green-600 mt-1">Completed bills</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </Card>
-
-          <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-red-700 font-medium">Rejected</p>
-                <p className="text-3xl font-bold text-red-900">{stats.rejectedBills}</p>
-                <p className="text-xs text-red-600 mt-1">Declined bills</p>
-              </div>
-              <XCircle className="w-8 h-8 text-red-600" />
-            </div>
-          </Card>
-        </div>
-
-        {/* Bills Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>All Bills ({bills.length})</CardTitle>
-            <CardDescription>Real-time billing data</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Bill ID</TableHead>
-                    <TableHead>Order #</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Generated</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bills.map((bill) => (
-                    <TableRow key={bill.id}>
-                      <TableCell className="font-medium">{bill.id.slice(-8)}</TableCell>
-                      <TableCell>{bill.orderNumber}</TableCell>
-                      <TableCell>{bill.clientName}</TableCell>
-                      <TableCell>{formatCurrency(bill.total)}</TableCell>
-                      <TableCell>
-                        <Badge variant={bill.billType === "gst" ? "default" : "secondary"}>
-                          {bill.billType.toUpperCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(bill.status)}</TableCell>
-                      <TableCell>{new Date(bill.generatedAt).toLocaleDateString()}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
     )
   }
 
@@ -1053,7 +731,329 @@ export function ModernAdminDashboard() {
     </div>
   )
 
-  // Real-time Salesman Panel with all orders from every salesperson
+  const renderOrdersPanel = () => <OrderPricingPanel />
+
+  const renderInventoryPanel = () => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900">Inventory Management</h2>
+            <p className="text-gray-600">Real-time stock monitoring and management</p>
+          </div>
+          <Button onClick={handleRefresh} disabled={isRefreshing}>
+            {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Refresh Inventory
+          </Button>
+        </div>
+
+        {/* Inventory Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 font-medium">Total Items</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.totalItems}</p>
+                <p className="text-xs text-blue-600 mt-1">Inventory products</p>
+              </div>
+              <Package2 className="w-8 h-8 text-blue-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700 font-medium">In Stock</p>
+                <p className="text-3xl font-bold text-green-900">{stats.inStockItems}</p>
+                <p className="text-xs text-green-600 mt-1">Available items</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-orange-700 font-medium">Low Stock</p>
+                <p className="text-3xl font-bold text-orange-900">{stats.lowStockItems}</p>
+                <p className="text-xs text-orange-600 mt-1">Need reorder</p>
+              </div>
+              <AlertTriangle className="w-8 h-8 text-orange-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-700 font-medium">Out of Stock</p>
+                <p className="text-3xl font-bold text-red-900">{stats.outOfStockItems}</p>
+                <p className="text-xs text-red-600 mt-1">Urgent restock</p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+          </Card>
+        </div>
+
+        {/* Inventory Items Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Inventory Items ({inventory.length})</CardTitle>
+            <CardDescription>Real-time inventory data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Item Name</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Current Stock</TableHead>
+                    <TableHead>Min Stock</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Last Updated</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {inventory.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.name}</TableCell>
+                      <TableCell>{item.category}</TableCell>
+                      <TableCell>{item.currentStock}</TableCell>
+                      <TableCell>{item.minStock}</TableCell>
+                      <TableCell>{getStatusBadge(item.status)}</TableCell>
+                      <TableCell>{formatCurrency(item.totalValue)}</TableCell>
+                      <TableCell>{new Date(item.lastUpdated).toLocaleDateString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const renderClientsPanel = () => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900">Client Management</h2>
+            <p className="text-gray-600">Real-time client data and analytics</p>
+          </div>
+          <Button onClick={handleRefresh} disabled={isRefreshing}>
+            {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Refresh Clients
+          </Button>
+        </div>
+
+        {/* Client Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 font-medium">Total Clients</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.totalClients}</p>
+                <p className="text-xs text-blue-600 mt-1">Registered clients</p>
+              </div>
+              <Users className="w-8 h-8 text-blue-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700 font-medium">Active Clients</p>
+                <p className="text-3xl font-bold text-green-900">{stats.activeClients}</p>
+                <p className="text-xs text-green-600 mt-1">With orders</p>
+              </div>
+              <UserCheck className="w-8 h-8 text-green-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-700 font-medium">Inactive Clients</p>
+                <p className="text-3xl font-bold text-gray-900">{stats.inactiveClients}</p>
+                <p className="text-xs text-gray-600 mt-1">No orders yet</p>
+              </div>
+              <UserX className="w-8 h-8 text-gray-600" />
+            </div>
+          </Card>
+        </div>
+
+        {/* Clients Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>All Clients ({clients.length})</CardTitle>
+            <CardDescription>Real-time client database</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client Name</TableHead>
+                    <TableHead>Contact Person</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>City</TableHead>
+                    <TableHead>Orders</TableHead>
+                    <TableHead>Last Order</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {clients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell className="font-medium">{client.partyName || client.name}</TableCell>
+                      <TableCell>{client.contactPerson}</TableCell>
+                      <TableCell>{client.contactNumber || client.phone}</TableCell>
+                      <TableCell>{client.city}</TableCell>
+                      <TableCell>{client.orderCount || 0}</TableCell>
+                      <TableCell>
+                        {client.lastUsed ? new Date(client.lastUsed).toLocaleDateString() : "Never"}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const renderBillsPanel = () => {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900">Bills Management</h2>
+            <p className="text-gray-600">Real-time billing and invoice tracking</p>
+          </div>
+          <Button onClick={handleRefresh} disabled={isRefreshing}>
+            {isRefreshing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+            Refresh Bills
+          </Button>
+        </div>
+
+        {/* Bill Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <Card className="p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-blue-700 font-medium">Total Bills</p>
+                <p className="text-3xl font-bold text-blue-900">{stats.totalBills}</p>
+                <p className="text-xs text-blue-600 mt-1">All generated bills</p>
+              </div>
+              <Receipt className="w-8 h-8 text-blue-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-yellow-700 font-medium">Generated</p>
+                <p className="text-3xl font-bold text-yellow-900">{stats.generatedBills}</p>
+                <p className="text-xs text-yellow-600 mt-1">Awaiting verification</p>
+              </div>
+              <FileText className="w-8 h-8 text-yellow-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-green-700 font-medium">Processed</p>
+                <p className="text-3xl font-bold text-green-900">{stats.processedBills}</p>
+                <p className="text-xs text-green-600 mt-1">Completed bills</p>
+              </div>
+              <CheckCircle className="w-8 h-8 text-green-600" />
+            </div>
+          </Card>
+
+          <Card className="p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-red-700 font-medium">Rejected</p>
+                <p className="text-3xl font-bold text-red-900">{stats.rejectedBills}</p>
+                <p className="text-xs text-red-600 mt-1">Declined bills</p>
+              </div>
+              <XCircle className="w-8 h-8 text-red-600" />
+            </div>
+          </Card>
+        </div>
+
+        {/* Bills Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>All Bills ({bills.length})</CardTitle>
+            <CardDescription>Real-time billing data</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Bill ID</TableHead>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Generated</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bills.map((bill) => (
+                    <TableRow key={bill.id}>
+                      <TableCell className="font-medium">{bill.id.slice(-8)}</TableCell>
+                      <TableCell>{bill.orderNumber}</TableCell>
+                      <TableCell>{bill.clientName}</TableCell>
+                      <TableCell>{formatCurrency(bill.total)}</TableCell>
+                      <TableCell>
+                        <Badge variant={bill.billType === "gst" ? "default" : "secondary"}>
+                          {bill.billType.toUpperCase()}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{getStatusBadge(bill.status)}</TableCell>
+                      <TableCell>{new Date(bill.generatedAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const renderSalesmanPanel = () => {
     // Get all salesmen from the system
     const allSalesmen = users.filter((u) => u.role === "salesman")
@@ -1122,6 +1122,22 @@ export function ModernAdminDashboard() {
       (sum, order) => sum + ((order.finalPricing || order.adminPricing || order.salesmanPricing)?.total || 0),
       0,
     )
+
+    // Pending approval salesmen
+    const pendingSalesmen = allSalesmen.filter((s) => s.isApproved === false)
+
+    // Approve handler
+    const handleApproveSalesman = (salesmanId: string) => {
+      const updatedUsers = users.map((u) =>
+        u.id === salesmanId ? { ...u, isApproved: true } : u
+      )
+      setUsers(updatedUsers)
+      try {
+        localStorage.setItem("wims-users-v4", JSON.stringify(updatedUsers))
+      } catch (error) {
+        console.error("Error saving users:", error)
+      }
+    }
 
     return (
       <div className="space-y-6">
@@ -1371,6 +1387,30 @@ export function ModernAdminDashboard() {
             </p>
           </Card>
         )}
+
+        {/* Pending Salesman Approvals */}
+        {pendingSalesmen.length > 0 && (
+          <Card className="p-6 border-l-4 border-l-amber-500 bg-amber-50 mb-6">
+            <h3 className="text-xl font-bold text-amber-800 mb-4">Pending Salesman Approvals</h3>
+            <div className="space-y-3">
+              {pendingSalesmen.map((salesman) => (
+                <div key={salesman.id} className="flex items-center justify-between bg-white rounded-lg p-4 shadow-sm">
+                  <div>
+                    <div className="font-semibold text-gray-900">{salesman.name}</div>
+                    <div className="text-gray-600 text-sm">{salesman.email}</div>
+                  </div>
+                  <Button
+                    variant="default"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => handleApproveSalesman(salesman.id)}
+                  >
+                    Approve
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
       </div>
     )
   }
@@ -1388,6 +1428,52 @@ export function ModernAdminDashboard() {
       </Card>
     </div>
   )
+
+  const renderPermissionsPanel = () => <PermissionRequestsPanel />
+
+  const renderPanel = () => {
+    switch (activePanel) {
+      case "home":
+        return renderHomePanel()
+      case "permissions":
+        return renderPermissionsPanel()
+      case "orders":
+      case "all-orders":
+      case "pending-orders":
+      case "approved-orders":
+      case "rejected-orders":
+        return renderOrdersPanel()
+      case "inventory":
+      case "all-items":
+      case "low-stock":
+      case "out-of-stock":
+      case "stock-transfer":
+        return renderInventoryPanel()
+      case "clients":
+      case "all-clients":
+      case "active-clients":
+      case "inactive-clients":
+        return renderClientsPanel()
+      case "bills":
+        return renderBillsPanel()
+      case "salesman":
+      case "all-salesman":
+      case "performance":
+      case "commissions":
+        return renderSalesmanPanel()
+      case "reports":
+      case "sales-report":
+      case "inventory-report":
+      case "client-report":
+      case "financial-report":
+        return renderReportsPanel()
+      case "settings":
+        // You may want to render a settings panel here
+        return <div>Settings Panel (to be implemented)</div>
+      default:
+        return renderHomePanel()
+    }
+  }
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -1497,48 +1583,7 @@ export function ModernAdminDashboard() {
       {/* Main Content */}
       <div className="flex-1 overflow-auto">
         <div className="p-8">
-          {activePanel === "home" && renderHomePanel()}
-          {(activePanel === "orders" ||
-            activePanel === "all-orders" ||
-            activePanel === "pending-orders" ||
-            activePanel === "approved-orders" ||
-            activePanel === "rejected-orders") &&
-            renderOrdersPanel()}
-          {(activePanel === "inventory" ||
-            activePanel === "all-items" ||
-            activePanel === "low-stock" ||
-            activePanel === "out-of-stock" ||
-            activePanel === "stock-transfer") &&
-            renderInventoryPanel()}
-          {(activePanel === "clients" ||
-            activePanel === "all-clients" ||
-            activePanel === "active-clients" ||
-            activePanel === "inactive-clients") &&
-            renderClientsPanel()}
-          {(activePanel === "salesman" ||
-            activePanel === "all-salesman" ||
-            activePanel === "performance" ||
-            activePanel === "commissions") &&
-            renderSalesmanPanel()}
-          {(activePanel === "reports" ||
-            activePanel === "sales-report" ||
-            activePanel === "inventory-report" ||
-            activePanel === "client-report" ||
-            activePanel === "financial-report") &&
-            renderReportsPanel()}
-          {activePanel === "settings" && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900">System Settings</h2>
-                <p className="text-gray-600">Configure your WIMS system preferences</p>
-              </div>
-              <Card className="p-8 text-center">
-                <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Settings Panel</h3>
-                <p className="text-gray-600">System configuration options will be available here</p>
-              </Card>
-            </div>
-          )}
+          {renderPanel()}
         </div>
       </div>
     </div>

@@ -9,16 +9,18 @@ interface User {
   email: string
   phone: string
   role: "admin" | "salesman"
+  isApproved?: boolean // undefined means approved for backward compatibility
 }
 
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string, role: "admin" | "salesman") => Promise<boolean>
   loginByName: (name: string) => Promise<boolean>
-  autoLoginLastUser: () => Promise<boolean> // Add this line
+  autoLoginLastUser: () => Promise<boolean>
   logout: () => void
   isAuthenticated: boolean
   users: User[]
+  setUsers: React.Dispatch<React.SetStateAction<User[]>>
   addUser: (userData: Omit<User, "id">, password: string) => User
   getCurrentUser: () => User | null
 }
@@ -29,16 +31,37 @@ interface AuthProviderProps {
   children: React.ReactNode
 }
 
+// Helper functions for cookie management
+const setCookie = (name: string, value: string, days: number) => {
+  const date = new Date()
+  date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000)
+  document.cookie = `${name}=${value};expires=${date.toUTCString()};path=/`
+}
+
+const getCookie = (name: string) => {
+  const nameEQ = name + "="
+  const ca = document.cookie.split(";")
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i]
+    while (c.charAt(0) === " ") c = c.substring(1, c.length)
+    if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length)
+  }
+  return null
+}
+
+const deleteCookie = (name: string) => {
+  document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:01 GMT;path=/"
+}
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  // Initialize to null/[] to avoid SSR localStorage access
   const [user, setUser] = useState<User | null>(null)
   const [users, setUsers] = useState<User[]>([])
-  
-  // Load user from localStorage on client only
+
+  // Load user from cookies and localStorage on client only
   useEffect(() => {
     if (typeof window === "undefined") return
     try {
-      const sessionData = localStorage.getItem("wims-session-v4")
+      const sessionData = getCookie("wims-session-v4")
       if (sessionData) {
         const parsedSession = JSON.parse(sessionData)
         // Check if session is still valid (7 days)
@@ -47,11 +70,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (sessionAge < maxAge) {
           setUser(parsedSession.user as User)
         } else {
+          deleteCookie("wims-session-v4")
           localStorage.removeItem("wims-session-v4")
         }
       }
     } catch (error) {
       console.error("Error loading session:", error)
+      deleteCookie("wims-session-v4")
       localStorage.removeItem("wims-session-v4")
     }
   }, [])
@@ -62,8 +87,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const savedUsers = localStorage.getItem("wims-users-v4")
       if (savedUsers) {
-        const parsedUsers = JSON.parse(savedUsers)
-        setUsers(Array.isArray(parsedUsers) ? parsedUsers : [])
+        let parsedUsers = JSON.parse(savedUsers)
+        // Backward compatibility: treat users without isApproved as approved
+        parsedUsers = Array.isArray(parsedUsers)
+          ? parsedUsers.map((u) => ({ ...u, isApproved: u.isApproved === undefined ? true : u.isApproved }))
+          : []
+        setUsers(parsedUsers)
       }
     } catch (error) {
       console.error("Error loading users:", error)
@@ -73,18 +102,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [])
 
   useEffect(() => {
-    // Persist user to localStorage on change
+    // Persist user to cookies and localStorage on change
     if (user) {
       const sessionData = {
         user: user,
         timestamp: Date.now(),
       }
       try {
+        setCookie("wims-session-v4", JSON.stringify(sessionData), 7) // 7 days
         localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
       } catch (error) {
         console.error("Error saving session:", error)
       }
     } else {
+      deleteCookie("wims-session-v4")
       localStorage.removeItem("wims-session-v4")
     }
   }, [user])
@@ -106,8 +137,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedUser = users.find((u) => u.email === email && u.role === role)
 
       if (storedUser) {
-        // In a real app, you'd verify the password hash
-        // For demo purposes, we'll accept any password for stored users
         const userData: User = storedUser
         setUser(userData)
 
@@ -117,6 +146,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         try {
+          setCookie("wims-session-v4", JSON.stringify(sessionData), 7) // 7 days
           localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
         } catch (error) {
           console.error("Error saving session:", error)
@@ -135,6 +165,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email,
           phone: role === "admin" ? "+1234567890" : "+0987654321",
           role,
+          isApproved: role === "admin" ? true : false,
         }
 
         setUser(userData)
@@ -145,6 +176,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         try {
+          setCookie("wims-session-v4", JSON.stringify(sessionData), 7) // 7 days
           localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
         } catch (error) {
           console.error("Error saving session:", error)
@@ -160,7 +192,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  // New function to login by name (for salesmen only)
   const loginByName = async (name: string): Promise<boolean> => {
     try {
       if (!name.trim()) {
@@ -171,7 +202,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedUser = users.find((u) => u.name.toLowerCase() === name.toLowerCase() && u.role === "salesman")
 
       if (storedUser) {
-        // Found the salesman, log them in
         setUser(storedUser)
 
         const sessionData = {
@@ -180,6 +210,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         try {
+          setCookie("wims-session-v4", JSON.stringify(sessionData), 7) // 7 days
           localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
         } catch (error) {
           console.error("Error saving session:", error)
@@ -195,6 +226,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           email: "salesman@wims.com",
           phone: "+0987654321",
           role: "salesman",
+          isApproved: false,
         }
 
         setUser(userData)
@@ -205,6 +237,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         try {
+          setCookie("wims-session-v4", JSON.stringify(sessionData), 7) // 7 days
           localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
         } catch (error) {
           console.error("Error saving session:", error)
@@ -223,7 +256,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const autoLoginLastUser = async (): Promise<boolean> => {
     try {
       // Check if there's a recent session (within last 30 days)
-      const sessionData = localStorage.getItem("wims-session-v4")
+      const sessionData = getCookie("wims-session-v4")
       if (sessionData) {
         const parsedSession = JSON.parse(sessionData)
         const sessionAge = Date.now() - parsedSession.timestamp
@@ -239,6 +272,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               user: existingUser,
               timestamp: Date.now(),
             }
+            setCookie("wims-session-v4", JSON.stringify(updatedSession), 30) // 30 days
             localStorage.setItem("wims-session-v4", JSON.stringify(updatedSession))
             return true
           }
@@ -253,6 +287,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           user: singleUser,
           timestamp: Date.now(),
         }
+        setCookie("wims-session-v4", JSON.stringify(sessionData), 30) // 30 days
         localStorage.setItem("wims-session-v4", JSON.stringify(sessionData))
         return true
       }
@@ -266,11 +301,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     setUser(null)
-    try {
-      localStorage.removeItem("wims-session-v4")
-    } catch (error) {
-      console.error("Error during logout:", error)
-    }
+    deleteCookie("wims-session-v4")
+    localStorage.removeItem("wims-session-v4")
   }
 
   const addUser = (userData: Omit<User, "id">, password: string): User => {
@@ -294,6 +326,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         ...userData,
         email: userData.email || `${userData.name.toLowerCase().replace(/\s+/g, ".")}@wims.com`,
         phone: userData.phone || "",
+        isApproved: false,
       }
     } else {
       // For admin role, check if user already exists
@@ -308,6 +341,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (!password.includes("admin")) {
           throw new Error("Admin registration requires authorized credentials")
         }
+      }
+      userData = {
+        ...userData,
+        isApproved: true,
       }
     }
 
@@ -337,16 +374,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.error("Error saving session:", error)
     }
 
-    // Auto-redirect after a short delay
-    setTimeout(() => {
-      if (typeof window !== "undefined") {
-        if (newUser.role === "admin") {
+    // Auto-redirect only for admin users
+    if (newUser.role === "admin") {
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
           window.location.href = "/admin/dashboard"
-        } else {
-          window.location.href = "/salesman/dashboard"
         }
-      }
-    }, 500)
+      }, 500)
+    }
 
     return newUser
   }
@@ -355,19 +390,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return user
   }
 
-  const value = {
-    user,
-    login,
-    loginByName,
-    autoLoginLastUser, // Add this line
-    logout,
-    isAuthenticated: !!user,
-    users,
-    addUser,
-    getCurrentUser,
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        login,
+        loginByName,
+        autoLoginLastUser,
+        logout,
+        isAuthenticated: !!user,
+        users,
+        setUsers,
+        addUser,
+        getCurrentUser,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
 export const useAuth = () => {

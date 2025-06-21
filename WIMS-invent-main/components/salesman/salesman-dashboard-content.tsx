@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useOrders } from "@/contexts/order-context"
+import type { Order, OrderItem, Bill } from "@/contexts/order-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -34,44 +36,14 @@ import {
   Calendar,
   MapPin,
 } from "lucide-react"
+import { useRouter } from 'next/navigation'
+import { useAdminPermission } from "@/contexts/admin-permission-context"
 
-// Peaceful girl voice welcome
-const speakPeacefulWelcome = (userName: string, userRole: string) => {
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel()
-
-    const utterance = new SpeechSynthesisUtterance()
-    utterance.text = `Welcome ${userName}. Have a wonderful day ahead.`
-
-    // Gentle, peaceful voice settings
-    utterance.rate = 0.9 // Slower, more peaceful
-    utterance.pitch = 1.2 // Slightly higher for feminine voice
-    utterance.volume = 0.7 // Softer volume
-
-    // Try to find a female voice
-    const voices = window.speechSynthesis.getVoices()
-    const femaleVoice =
-      voices.find(
-        (voice) =>
-          voice.name.toLowerCase().includes("female") ||
-          voice.name.toLowerCase().includes("woman") ||
-          voice.name.toLowerCase().includes("samantha") ||
-          voice.name.toLowerCase().includes("karen") ||
-          voice.name.toLowerCase().includes("susan"),
-      ) ||
-      voices.find((voice) => voice.gender === "female") ||
-      voices[0]
-
-    if (femaleVoice) {
-      utterance.voice = femaleVoice
-    }
-
-    window.speechSynthesis.speak(utterance)
-  }
-}
+type Variant = "default" | "secondary" | "destructive" | "outline"
 
 export function SalesmanDashboardContent() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const router = useRouter()
   const {
     orders,
     clients,
@@ -83,135 +55,133 @@ export function SalesmanDashboardContent() {
     adjustOrderPricing,
     exportBackup,
     createManualBackup,
-    dataIntegrity,
     verifyDataIntegrity,
   } = useOrders()
+  const { requestAdminPermission, getRequestStatus } = useAdminPermission()
+
+  // State management
   const [isCreateOrderOpen, setIsCreateOrderOpen] = useState(false)
   const [isCreateClientOpen, setIsCreateClientOpen] = useState(false)
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false)
-  const [editingOrder, setEditingOrder] = useState<any>(null)
-  const [previewBill, setPreviewBill] = useState<any>(null)
-  const [previewOrder, setPreviewOrder] = useState<any>(null)
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null)
+  const [previewBill, setPreviewBill] = useState<Bill | null>(null)
+  const [previewOrder, setPreviewOrder] = useState<Order | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [isSpeaking, setIsSpeaking] = useState(false)
 
-  // Filter orders for current salesman - Enhanced filtering
-  const salesmanOrders = orders.filter((order) => {
-    // Check multiple ways the salesman might be identified
-    const isSalesmanOrder =
-      order.salesmanId === user?.id ||
-      order.salesmanName === user?.name ||
-      order.createdBy === user?.id ||
-      order.createdBy === user?.name
+  // Speech synthesis for welcome message
+  const speakWelcome = useCallback(() => {
+    if (!isSpeaking && "speechSynthesis" in window) {
+      setIsSpeaking(true)
+      window.speechSynthesis.cancel()
 
-    console.log(`🔍 Checking order ${order.orderNumber}:`, {
-      orderSalesmanId: order.salesmanId,
-      orderSalesmanName: order.salesmanName,
-      orderCreatedBy: order.createdBy,
-      currentUserId: user?.id,
-      currentUserName: user?.name,
-      isMatch: isSalesmanOrder,
-    })
+      const utterance = new SpeechSynthesisUtterance()
+      utterance.text = `Welcome back ${user?.name || ''}! I'm here to help you manage your orders.`
+      utterance.rate = 0.9
+      utterance.pitch = 1.2
 
-    return isSalesmanOrder
-  })
+      const setVoice = () => {
+        const voices = window.speechSynthesis.getVoices()
+        const femaleVoice = voices.find(
+          (voice) =>
+            voice.name.toLowerCase().includes("female") ||
+            voice.name.toLowerCase().includes("woman") ||
+            voice.name.toLowerCase().includes("samantha")
+        )
+        if (femaleVoice) {
+          utterance.voice = femaleVoice
+        }
+        window.speechSynthesis.speak(utterance)
+      }
 
-  console.log(`📊 Found ${salesmanOrders.length} orders for salesman ${user?.name} (ID: ${user?.id})`)
+      if (window.speechSynthesis.getVoices().length > 0) {
+        setVoice()
+      } else {
+        window.speechSynthesis.onvoiceschanged = setVoice
+      }
+
+      utterance.onend = () => setIsSpeaking(false)
+    }
+  }, [user?.name, isSpeaking])
+
+  // Filter orders for current salesman
+  const salesmanOrders = useMemo(() => {
+    return orders.filter((order) => order.salesmanId === user?.id)
+  }, [orders, user?.id])
 
   // Filter orders based on search and status
-  const filteredOrders = salesmanOrders.filter((order) => {
-    const matchesSearch =
-      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.notes.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredOrders = useMemo(() => {
+    return salesmanOrders.filter((order) => {
+      const matchesSearch =
+        order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.notes.toLowerCase().includes(searchTerm.toLowerCase())
 
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter
+      const matchesStatus = statusFilter === "all" || order.status === statusFilter
 
-    return matchesSearch && matchesStatus
-  })
+      return matchesSearch && matchesStatus
+    })
+  }, [salesmanOrders, searchTerm, statusFilter])
 
   // Filter bills for current salesman
-  const salesmanBills = bills.filter((bill) => {
-    const order = orders.find((order) => order.id === bill.orderId)
-    if (!order) return false // Skip if order not found
-
-    const isSalesmanBill =
-      order.salesmanId === user?.id ||
-      order.salesmanName === user?.name ||
-      order.createdBy === user?.id ||
-      order.createdBy === user?.name
-
-    return isSalesmanBill
-  })
+  const salesmanBills = useMemo(() => {
+    return bills.filter((bill) => {
+      const order = orders.find((order) => order.id === bill.orderId)
+      return order?.salesmanId === user?.id
+    })
+  }, [bills, orders, user?.id])
 
   // Calculate statistics
-  const stats = {
+  const stats = useMemo(() => ({
     totalOrders: salesmanOrders.length,
     pendingOrders: salesmanOrders.filter((order) => order.status === "pending").length,
     approvedOrders: salesmanOrders.filter((order) => order.status === "approved").length,
     totalClients: clients.length,
     generatedBills: salesmanBills.length,
     pendingBills: salesmanBills.filter((bill) => bill.status === "generated").length,
-  }
+  }), [salesmanOrders, clients.length, salesmanBills])
 
   // Get pricing summary
-  const pricingSummary = getOrderPricingSummary()
+  const pricingSummary = useMemo(() => getOrderPricingSummary(), [getOrderPricingSummary])
 
   // Get recent orders (last 10)
-  const recentOrders = salesmanOrders
+  const recentOrders = useMemo(() => salesmanOrders
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10)
+    .slice(0, 10), [salesmanOrders])
 
   const getStatusBadge = (status: string) => {
-    const variants = {
-      pending: "secondary",
-      admin_priced: "default",
-      salesman_adjusted: "outline",
-      approved: "default",
-      rejected: "destructive",
-      completed: "default",
-    } as const
-
-    const labels = {
-      pending: "PENDING",
-      admin_priced: "PRICED",
-      salesman_adjusted: "ADJUSTED",
-      approved: "APPROVED",
-      rejected: "REJECTED",
-      completed: "COMPLETED",
+    const statusMap: Record<string, { variant: Variant, label: string }> = {
+      pending: { variant: "secondary", label: "PENDING" },
+      admin_priced: { variant: "default", label: "PRICED" },
+      salesman_adjusted: { variant: "outline", label: "ADJUSTED" },
+      approved: { variant: "default", label: "APPROVED" },
+      rejected: { variant: "destructive", label: "REJECTED" },
+      completed: { variant: "default", label: "COMPLETED" },
     }
 
-    return (
-      <Badge variant={variants[status as keyof typeof variants] || "default"}>
-        {labels[status as keyof typeof labels] || status.toUpperCase()}
-      </Badge>
-    )
+    const { variant = "default", label = status.toUpperCase() } = statusMap[status] || {}
+    return <Badge variant={variant}>{label}</Badge>
   }
 
   const getBillStatusBadge = (status: string) => {
-    const variants = {
+    const statusMap: Record<string, Variant> = {
       generated: "secondary",
       verified: "default",
       processed: "default",
       rejected: "destructive",
-    } as const
-
-    return <Badge variant={variants[status as keyof typeof variants] || "default"}>{status.toUpperCase()}</Badge>
+    }
+    return <Badge variant={statusMap[status] || "default"}>{status.toUpperCase()}</Badge>
   }
 
   const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "pending":
-        return <Clock className="w-4 h-4 text-amber-600" />
-      case "admin_priced":
-        return <DollarSign className="w-4 h-4 text-blue-600" />
-      case "approved":
-        return <CheckCircle className="w-4 h-4 text-green-600" />
-      case "rejected":
-        return <AlertTriangle className="w-4 h-4 text-red-600" />
-      default:
-        return <Package className="w-4 h-4 text-gray-600" />
+    const iconMap: Record<string, React.ReactNode> = {
+      pending: <Clock className="w-4 h-4 text-amber-600" />,
+      admin_priced: <DollarSign className="w-4 h-4 text-blue-600" />,
+      approved: <CheckCircle className="w-4 h-4 text-green-600" />,
+      rejected: <AlertTriangle className="w-4 h-4 text-red-600" />,
     }
+    return iconMap[status] || <Package className="w-4 h-4 text-gray-600" />
   }
 
   const formatCurrency = (amount: number) => {
@@ -222,28 +192,38 @@ export function SalesmanDashboardContent() {
     }).format(amount)
   }
 
-  const handleGenerateBill = (order: any, billType: "regular" | "gst") => {
-    const currentPricing = order.finalPricing || order.adminPricing || order.salesmanPricing
-    if (!currentPricing) {
-      alert("Order must be priced before generating a bill")
-      return
-    }
+  const handleGenerateBill = async (order: Order, billType: "regular" | "gst") => {
+    try {
+      const currentPricing = order.finalPricing || order.adminPricing || order.salesmanPricing
+      if (!currentPricing) {
+        throw new Error("Order must be priced before generating a bill")
+      }
 
-    let gstNumber = undefined
-    if (billType === "gst") {
-      gstNumber = prompt("Enter GST Number:")
-      if (!gstNumber) return
-    }
+      if (billType === "gst" && !order.withGst) {
+        throw new Error("This order is not marked for GST billing")
+      }
 
-    const bill = generateBill(order.id, billType, gstNumber)
-    if (bill) {
+      let gstNumber = order.gstNumber
+      if (billType === "gst" && !gstNumber) {
+        gstNumber = prompt("Enter GST Number:")?.trim() || ""
+        if (!gstNumber) {
+          throw new Error("GST Number is required for GST bills")
+        }
+      }
+
+      const bill = await generateBill(order.id, billType, gstNumber)
+      if (!bill) {
+        throw new Error("Failed to generate bill")
+      }
+
       alert(`${billType.toUpperCase()} bill generated successfully! Bill ID: ${bill.id}`)
-    } else {
-      alert("Failed to generate bill")
+    } catch (error) {
+      console.error("Error generating bill:", error)
+      alert(error instanceof Error ? error.message : "An error occurred while generating the bill")
     }
   }
 
-  const handleEditOrder = (order: any) => {
+  const handleEditOrder = (order: Order) => {
     if (!order.isEditable) {
       alert("This order cannot be edited as it has been processed by admin.")
       return
@@ -257,48 +237,59 @@ export function SalesmanDashboardContent() {
     setEditingOrder(null)
   }
 
-  const handlePreviewBill = (order: any) => {
+  const handlePreviewBill = (order: Order) => {
     const orderBill = bills.find((bill) => bill.orderId === order.id)
     if (orderBill) {
       setPreviewBill(orderBill)
       setPreviewOrder(order)
+    } else {
+      alert("No bill found for this order")
     }
   }
 
-  const handleExportBackup = () => {
+  const handleExportBackup = async () => {
     try {
-      exportBackup()
+      await exportBackup()
       alert("Backup exported successfully! Check your downloads folder.")
     } catch (error) {
+      console.error("Backup export failed:", error)
       alert("Failed to export backup. Please try again.")
     }
   }
 
-  const handleCreateBackup = () => {
+  const handleCreateBackup = async () => {
     try {
-      createManualBackup()
+      await createManualBackup()
       alert("Manual backup created successfully!")
     } catch (error) {
+      console.error("Backup creation failed:", error)
       alert("Failed to create backup. Please try again.")
     }
   }
 
-  // Peaceful welcome effect
+  // Welcome message effect
   useEffect(() => {
     if (isDataLoaded && user?.name) {
-      const speakWelcome = () => {
-        setTimeout(() => {
-          speakPeacefulWelcome(user.name, "salesman")
-        }, 800)
-      }
+      speakWelcome()
+    }
 
-      if (window.speechSynthesis.getVoices().length > 0) {
-        speakWelcome()
-      } else {
-        window.speechSynthesis.onvoiceschanged = speakWelcome
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
       }
     }
-  }, [isDataLoaded, user?.name])
+  }, [isDataLoaded, user?.name, speakWelcome])
+
+  // Request approval if not approved
+  useEffect(() => {
+    if (user && user.role === "salesman" && user.isApproved === false) {
+      // Only send a request if not already pending/approved
+      const existing = getRequestStatus(user.id, "login")
+      if (!existing) {
+        requestAdminPermission("login")
+      }
+    }
+  }, [user, getRequestStatus, requestAdminPermission])
 
   // Show loading state while data is being loaded
   if (!isDataLoaded) {
@@ -315,20 +306,33 @@ export function SalesmanDashboardContent() {
     )
   }
 
+  if (user && user.isApproved === false) {
+    const req = getRequestStatus(user.id, "login")
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-stone-900 to-neutral-900">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold text-amber-600 mb-2">Pending Approval</h2>
+          <p className="text-stone-200 mb-4">Your account is pending admin approval. Please wait for approval before accessing the dashboard.</p>
+          {req && req.status === "pending" && (
+            <p className="text-amber-400 mt-2">Approval request sent to admin.</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-900 to-neutral-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Professional Header */}
+        {/* Header Section */}
         <div className="bg-gradient-to-r from-stone-800 to-neutral-800 rounded-lg p-6 border border-amber-700/30">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-stone-100 mb-2">Welcome, {user?.name}</h1>
+              <h1 className="text-2xl md:text-3xl font-bold text-stone-100 mb-1">Welcome, {user?.name}</h1>
               <p className="text-stone-400">Salesman Dashboard</p>
-              <p className="text-xs text-stone-500 mt-1">
-                Your Orders: {salesmanOrders.length} | Total Orders in System: {orders.length} | Your ID: {user?.id}
-              </p>
             </div>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -355,6 +359,17 @@ export function SalesmanDashboardContent() {
               >
                 <User className="w-4 h-4 mr-2" />
                 Admin Access
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  logout();
+                  window.location.href = '/login';
+                }}
+                className="bg-red-700 border-red-600 text-white hover:bg-red-800"
+              >
+                Logout
               </Button>
             </div>
           </div>
@@ -396,7 +411,7 @@ export function SalesmanDashboardContent() {
                 onClick={() => setIsCreateClientOpen(true)}
                 variant="outline"
                 className="w-full bg-stone-700 border-amber-600/50 text-stone-200 hover:bg-stone-600"
-              >
+                  >
                 <Building2 className="w-4 h-4 mr-2" />
                 Add Client
               </Button>
@@ -405,7 +420,7 @@ export function SalesmanDashboardContent() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           {[
             { icon: Package, label: "Total Orders", value: stats.totalOrders, color: "text-blue-400" },
             { icon: Clock, label: "Pending Orders", value: stats.pendingOrders, color: "text-amber-400" },
@@ -417,10 +432,10 @@ export function SalesmanDashboardContent() {
             <Card key={index} className="bg-gradient-to-br from-stone-800 to-neutral-800 border-amber-700/30">
               <CardContent className="p-4">
                 <div className="flex items-center space-x-2">
-                  <stat.icon className={`w-8 h-8 ${stat.color}`} />
+                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
                   <div>
                     <p className="text-sm font-medium text-stone-300">{stat.label}</p>
-                    <p className="text-2xl font-bold text-stone-100">{stat.value}</p>
+                    <p className="text-xl font-bold text-stone-100">{stat.value}</p>
                   </div>
                 </div>
               </CardContent>
@@ -484,7 +499,7 @@ export function SalesmanDashboardContent() {
         {/* All My Orders Section */}
         <Card className="bg-gradient-to-br from-stone-800 to-neutral-800 border-amber-700/30">
           <CardHeader>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2 text-stone-100">
                   <Package className="w-5 h-5 text-amber-600" />
@@ -494,14 +509,14 @@ export function SalesmanDashboardContent() {
                   Complete list of all orders you have created
                 </CardDescription>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-stone-400 w-4 h-4" />
                   <Input
                     placeholder="Search orders..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10 bg-stone-700 border-stone-600 text-stone-200 w-64"
+                    className="pl-10 bg-stone-700 border-stone-600 text-stone-200 w-full"
                   />
                 </div>
                 <select
@@ -531,22 +546,8 @@ export function SalesmanDashboardContent() {
                 <p className="text-sm text-stone-500 mb-4">
                   {searchTerm || statusFilter !== "all"
                     ? "Try adjusting your search or filter criteria"
-                    : `Searching for orders with Salesman ID: ${user?.id} or Name: ${user?.name}`}
+                    : "Create your first order to get started"}
                 </p>
-
-                {/* Debug information */}
-                <div className="bg-stone-700/50 rounded-lg p-4 mt-4 text-left max-w-md mx-auto">
-                  <p className="text-xs text-stone-400 mb-2">Debug Info:</p>
-                  <p className="text-xs text-stone-300">Your User ID: {user?.id}</p>
-                  <p className="text-xs text-stone-300">Your Name: {user?.name}</p>
-                  <p className="text-xs text-stone-300">Total Orders in System: {orders.length}</p>
-                  <p className="text-xs text-stone-300">
-                    Orders Matching Your ID: {orders.filter((o) => o.salesmanId === user?.id).length}
-                  </p>
-                  <p className="text-xs text-stone-300">
-                    Orders Matching Your Name: {orders.filter((o) => o.salesmanName === user?.name).length}
-                  </p>
-                </div>
 
                 {!searchTerm && statusFilter === "all" && (
                   <Button
@@ -671,9 +672,8 @@ export function SalesmanDashboardContent() {
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => {
-                                    // View order details
                                     alert(
-                                      `Order Details:\n\nOrder #: ${order.orderNumber}\nClient: ${order.clientName}\nItems: ${order.items.length} types\nStatus: ${order.status}\nNotes: ${order.notes || "No notes"}`,
+                                      `Order Details:\n\nOrder #: ${order.orderNumber}\nClient: ${order.clientName}\nItems: ${order.items.length} types\nStatus: ${order.status}\nNotes: ${order.notes || "No notes"}`
                                     )
                                   }}
                                   className="text-stone-400 hover:text-stone-200 h-8 w-8 p-0"
@@ -703,15 +703,17 @@ export function SalesmanDashboardContent() {
                                     >
                                       <Download className="w-4 h-4" />
                                     </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleGenerateBill(order, "gst")}
-                                      className="text-stone-400 hover:text-stone-200 h-8 w-8 p-0"
-                                      title="Generate GST Bill"
-                                    >
-                                      <Receipt className="w-4 h-4" />
-                                    </Button>
+                                    {order.withGst && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleGenerateBill(order, "gst")}
+                                        className="text-stone-400 hover:text-stone-200 h-8 w-8 p-0"
+                                        title="Generate GST Bill"
+                                      >
+                                        <Receipt className="w-4 h-4" />
+                                      </Button>
+                                    )}
                                   </>
                                 )}
                               </div>
@@ -792,14 +794,14 @@ export function SalesmanDashboardContent() {
         {/* Bill Preview Dialog */}
         <BillPreviewDialog
           open={!!previewBill}
-          onOpenChange={(open) => {
+          onOpenChange={(open: boolean) => {
             if (!open) {
               setPreviewBill(null)
               setPreviewOrder(null)
             }
           }}
-          bill={previewBill}
-          order={previewOrder}
+          bill={previewBill as any}
+          order={previewOrder as any}
         />
       </div>
     </div>
