@@ -10,14 +10,21 @@ export default function AdminDashboard() {
   const router = useRouter()
 
   useEffect(() => {
+    // Only redirect if explicitly not authenticated
+    // This prevents unnecessary redirects during initial load
     if (isAuthenticated === false) {
-      router.push("/admin/login")
-    } else if (user && user.role !== "admin") {
-      router.push("/admin/login")
+      router.replace("/admin/login")
+      return
+    }
+
+    // If we have a user but they're not an admin, redirect
+    if (user && user.role !== "admin") {
+      router.replace("/admin/login")
     }
   }, [isAuthenticated, user, router])
 
-  if (isAuthenticated === false || user === undefined) {
+  // Show loading state during initial load
+  if (isAuthenticated === undefined || user === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -28,6 +35,7 @@ export default function AdminDashboard() {
     )
   }
 
+  // Show access denied if user is not an admin
   if (user && user.role !== "admin") {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -35,7 +43,7 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
           <p className="text-gray-600 mb-4">You don't have permission to access this page.</p>
           <button
-            onClick={() => router.push("/admin/login")}
+            onClick={() => router.replace("/admin/login")}
             className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
           >
             Go to Login

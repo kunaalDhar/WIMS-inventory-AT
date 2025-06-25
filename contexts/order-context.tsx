@@ -3,7 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 
-interface OrderItem {
+export interface OrderItem {
   id: string
   name: string
   category: string
@@ -42,7 +42,7 @@ export interface Client {
   phone?: string
 }
 
-interface Bill {
+export interface Bill {
   id: string
   orderId: string
   orderNumber: string
@@ -64,7 +64,7 @@ interface Bill {
   createdBy: "salesman" | "admin"
 }
 
-interface Order {
+export interface Order {
   id: string
   orderNumber?: string
   salesmanId: string
@@ -120,6 +120,9 @@ interface Order {
   daysRemaining?: number
   archivedAt?: string
   retentionExpired?: boolean
+  // Legacy fields for backward compatibility
+  vendorId?: string
+  vendorName?: string
 }
 
 // 30-Day Permanent Retention Policy

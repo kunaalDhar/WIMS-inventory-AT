@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -21,41 +21,11 @@ export function LoginForm({ role }: LoginFormProps) {
   const [password, setPassword] = useState("")
   const [name, setName] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(true)
+  const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const { login, loginByName, users, autoLoginLastUser, user } = useAuth()
   const router = useRouter()
-
-  useEffect(() => {
-    // Try to auto-login when component mounts
-    const attemptAutoLogin = async () => {
-      setIsAutoLoggingIn(true)
-      const success = await autoLoginLastUser()
-      if (success) {
-        setSuccess("Welcome back! Redirecting...")
-        setTimeout(() => {
-          // Redirect based on the actual user role
-          if (user?.role === "admin") {
-            router.push("/admin/dashboard")
-          } else if (user?.role === "salesman") {
-            router.push("/salesman/dashboard")
-          }
-        }, 1000)
-      } else {
-        // Auto-fill name if there's only one salesman
-        if (role === "salesman") {
-          const salesmen = users.filter((u) => u.role === "salesman")
-          if (salesmen.length === 1) {
-            setName(salesmen[0].name)
-          }
-        }
-      }
-      setIsAutoLoggingIn(false)
-    }
-
-    attemptAutoLogin()
-  }, [role, users, autoLoginLastUser, router, user])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,18 +40,22 @@ export function LoginForm({ role }: LoginFormProps) {
         // Admin still uses email/password
         success = await login(email, password, role)
       } else {
-        // Salesman uses name-only login
-        if (!name.trim()) {
-          setError("Please enter your name")
+        // Salesman now uses name and password
+        if (!name.trim() || !password.trim()) {
+          setError("Please enter your name and password")
           setIsSubmitting(false)
           return
         }
-        success = await loginByName(name.trim())
+        success = await loginByName(name.trim(), password.trim())
       }
 
       if (success) {
+        if (role === "salesman" && user && user.isApproved === false) {
+          setSuccess("")
+          setError("Your account is pending admin approval. Please wait for approval before accessing the dashboard.")
+          return
+        }
         setSuccess("Welcome back! Redirecting...")
-        // Redirect based on the actual user role
         setTimeout(() => {
           if (user?.role === "admin") {
             router.push("/admin/dashboard")
@@ -193,20 +167,36 @@ export function LoginForm({ role }: LoginFormProps) {
               </div>
             </>
           ) : (
-            <div className="space-y-2">
-              <Label htmlFor="name" className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                Salesman Name
-              </Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Enter your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="name" className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  Salesman Name
+                </Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-muted-foreground" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </>
           )}
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>

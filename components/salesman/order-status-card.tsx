@@ -9,65 +9,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useOrders } from "@/contexts/order-context"
+import type { Order, OrderItem } from "@/contexts/order-context"
 import { Clock, CheckCircle, AlertTriangle, DollarSign, FileText, Edit } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { useState } from "react"
-
-interface OrderItem {
-  id: string
-  name: string
-  category: string
-  volume: string
-  bottlesPerCase: number
-  requestedQuantity: number
-  unit: string
-  description?: string
-  salesmanPrice?: number
-  adminPrice?: number
-  finalPrice?: number
-}
-
-interface Order {
-  id: string
-  salesmanId: string
-  salesmanName: string
-  vendorId: string
-  vendorName: string
-  items: OrderItem[]
-  status: "pending" | "admin_priced" | "salesman_adjusted" | "approved" | "rejected" | "completed"
-  totalItems: number
-  notes: string
-  createdAt: string
-  adminPricedAt?: string
-  salesmanAdjustedAt?: string
-  approvedAt?: string
-  adminNotes?: string
-  salesmanAdjustmentNotes?: string
-  allowPriceAdjustment?: boolean
-  priceAdjustmentRange?: { min: number; max: number }
-  salesmanPricing?: {
-    subtotal: number
-    total: number
-    itemPrices: Record<string, number>
-  }
-  adminPricing?: {
-    subtotal: number
-    tax: number
-    total: number
-    itemPrices: Record<string, number>
-  }
-  finalPricing?: {
-    subtotal: number
-    tax: number
-    total: number
-    itemPrices: Record<string, number>
-    adjustments: Record<string, number>
-  }
-  orderNumber: string
-  clientName: string
-  withGst: boolean
-  isEditable: boolean
-}
 
 interface OrderStatusCardProps {
   order: Order
