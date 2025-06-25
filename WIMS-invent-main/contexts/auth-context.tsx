@@ -10,12 +10,13 @@ interface User {
   phone: string
   role: "admin" | "salesman"
   isApproved?: boolean // undefined means approved for backward compatibility
+  password?: string
 }
 
 interface AuthContextType {
   user: User | null
   login: (email: string, password: string, role: "admin" | "salesman") => Promise<boolean>
-  loginByName: (name: string) => Promise<boolean>
+  loginByName: (name: string, password?: string) => Promise<boolean>
   autoLoginLastUser: () => Promise<boolean>
   logout: () => void
   isAuthenticated: boolean
@@ -192,7 +193,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  const loginByName = async (name: string): Promise<boolean> => {
+  const loginByName = async (name: string, password?: string): Promise<boolean> => {
     try {
       if (!name.trim()) {
         return false
@@ -202,6 +203,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedUser = users.find((u) => u.name.toLowerCase() === name.toLowerCase() && u.role === "salesman")
 
       if (storedUser) {
+        if (password && storedUser.password && storedUser.password !== password) {
+          return false
+        }
         setUser(storedUser)
 
         const sessionData = {
@@ -327,6 +331,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email: userData.email || `${userData.name.toLowerCase().replace(/\s+/g, ".")}@wims.com`,
         phone: userData.phone || "",
         isApproved: false,
+        password,
       }
     } else {
       // For admin role, check if user already exists

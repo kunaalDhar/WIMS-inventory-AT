@@ -59,6 +59,7 @@ import {
 } from "lucide-react"
 import { OrderPricingPanel } from "@/components/admin/order-pricing-panel"
 import { PermissionRequestsPanel } from "@/components/admin/permission-requests-panel"
+import { EditOrderItemsPanel } from "@/components/admin/edit-order-items-panel"
 
 interface SidebarItem {
   id: string
@@ -89,6 +90,7 @@ const sidebarItems: SidebarItem[] = [
       { id: "pending-orders", label: "Pending Orders", icon: Clock },
       { id: "approved-orders", label: "Approved Orders", icon: CheckCircle },
       { id: "rejected-orders", label: "Rejected Orders", icon: XCircle },
+      { id: "edit-items", label: "Edit Items", icon: Edit },
     ],
   },
   {
@@ -1470,6 +1472,8 @@ export function ModernAdminDashboard() {
       case "settings":
         // You may want to render a settings panel here
         return <div>Settings Panel (to be implemented)</div>
+      case "edit-items":
+        return <EditOrderItemsPanel />
       default:
         return renderHomePanel()
     }

@@ -40,13 +40,13 @@ export function LoginForm({ role }: LoginFormProps) {
         // Admin still uses email/password
         success = await login(email, password, role)
       } else {
-        // Salesman uses name-only login
-        if (!name.trim()) {
-          setError("Please enter your name")
+        // Salesman now uses name and password
+        if (!name.trim() || !password.trim()) {
+          setError("Please enter your name and password")
           setIsSubmitting(false)
           return
         }
-        success = await loginByName(name.trim())
+        success = await loginByName(name.trim(), password.trim())
       }
 
       if (success) {
@@ -167,20 +167,36 @@ export function LoginForm({ role }: LoginFormProps) {
               </div>
             </>
           ) : (
-            <div className="space-y-2">
-              <Label htmlFor="name" className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                Salesman Name
-              </Label>
-              <Input
-                id="name"
-                type="text"
-                placeholder="Enter your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="name" className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  Salesman Name
+                </Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password" className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-muted-foreground" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </>
           )}
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>
