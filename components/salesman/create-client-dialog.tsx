@@ -91,7 +91,7 @@ const clientMasterData: ClientMasterData[] = [
 
 export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogProps) {
   const { user } = useAuth()
-  const { addClient, checkClientExists } = useOrders()
+  const { addClient, checkClientExists, refreshData } = useOrders()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [duplicateError, setDuplicateError] = useState("")
@@ -190,6 +190,9 @@ export function CreateClientDialog({ open, onOpenChange }: CreateClientDialogPro
         email: formData.email.trim(),
         createdBy: user.id,
       })
+
+      // Refresh client list for all users
+      refreshData()
 
       // Show success and reset form
       setShowSuccess(true)

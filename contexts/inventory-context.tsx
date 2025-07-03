@@ -3,24 +3,25 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 
-interface InventoryItem {
+export interface InventoryItem {
   id: string
   name: string
   category: string
   volume: string
-  bottlesPerCase: number
   currentStock: number
-  minStock: number
-  maxStock: number
   status: "in-stock" | "low-stock" | "out-of-stock" | "overstocked"
-  lastUpdated: string
-  location: string
-  supplier: string
   unitCost: number
   totalValue: number
-  reorderPoint: number
   lastOrderDate?: string
   expiryDate?: string
+  minPrice?: number
+  maxPrice?: number
+  minStock: number
+  maxStock: number
+  location: string
+  bottlesPerCase: number
+  supplier: string
+  reorderPoint: number
 }
 
 interface StockTransfer {
@@ -84,6 +85,7 @@ interface InventoryContextType {
   }
   refreshInventory: () => void
   clearInventoryData: () => void
+  updateItemPrice: (itemId: string, newPrice: number) => void
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined)
@@ -126,118 +128,26 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
   const [alerts, setAlerts] = useState<InventoryAlert[]>([])
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
-  // Default inventory data
-  const defaultInventory: InventoryItem[] = [
-    {
-      id: "1",
-      name: "Litchi",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      currentStock: 45,
-      minStock: 10,
-      maxStock: 100,
-      status: "in-stock",
-      lastUpdated: new Date().toISOString(),
-      location: "Warehouse A",
-      supplier: "Fresh Fruits Ltd",
-      unitCost: 320,
-      totalValue: 14400,
-      reorderPoint: 15,
-      lastOrderDate: "2024-01-10",
-      expiryDate: "2024-06-15",
-    },
-    {
-      id: "2",
-      name: "Mango",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      currentStock: 8,
-      minStock: 15,
-      maxStock: 100,
-      status: "low-stock",
-      lastUpdated: new Date().toISOString(),
-      location: "Warehouse A",
-      supplier: "Tropical Beverages",
-      unitCost: 340,
-      totalValue: 2720,
-      reorderPoint: 20,
-      lastOrderDate: "2024-01-08",
-      expiryDate: "2024-07-20",
-    },
-    {
-      id: "3",
-      name: "Guava",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      currentStock: 0,
-      minStock: 20,
-      maxStock: 100,
-      status: "out-of-stock",
-      lastUpdated: new Date().toISOString(),
-      location: "Warehouse A",
-      supplier: "Natural Drinks Co",
-      unitCost: 330,
-      totalValue: 0,
-      reorderPoint: 25,
-      lastOrderDate: "2024-01-05",
-      expiryDate: "2024-08-10",
-    },
-    {
-      id: "4",
-      name: "Mix Fruit",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      currentStock: 32,
-      minStock: 8,
-      maxStock: 80,
-      status: "in-stock",
-      lastUpdated: new Date().toISOString(),
-      location: "Warehouse B",
-      supplier: "Premium Juices",
-      unitCost: 350,
-      totalValue: 11200,
-      reorderPoint: 12,
-      lastOrderDate: "2024-01-12",
-      expiryDate: "2024-09-05",
-    },
-    {
-      id: "5",
-      name: "Orange",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      currentStock: 25,
-      minStock: 10,
-      maxStock: 90,
-      status: "in-stock",
-      lastUpdated: new Date().toISOString(),
-      location: "Warehouse A",
-      supplier: "Citrus Fresh Ltd",
-      unitCost: 335,
-      totalValue: 8375,
-      reorderPoint: 15,
-      lastOrderDate: "2024-01-14",
-      expiryDate: "2024-05-30",
-    },
-  ]
-
   // Initialize data from localStorage on mount
   useEffect(() => {
     const initializeInventoryData = () => {
       try {
         console.log("🔄 Initializing inventory data from localStorage...")
 
-        const savedInventory = safeGet(INVENTORY_STORAGE_KEYS.INVENTORY, defaultInventory)
+        // Only use empty array as fallback, not demo items
+        let savedInventory = safeGet(INVENTORY_STORAGE_KEYS.INVENTORY, [])
+        // Ensure unitCost is always a number
+        if (Array.isArray(savedInventory)) {
+          savedInventory = savedInventory.map(item => ({
+            ...item,
+            unitCost: Number(item.unitCost) || 0
+          }))
+        }
         const savedTransfers = safeGet(INVENTORY_STORAGE_KEYS.TRANSFERS, [])
         const savedMovements = safeGet(INVENTORY_STORAGE_KEYS.MOVEMENTS, [])
         const savedAlerts = safeGet(INVENTORY_STORAGE_KEYS.ALERTS, [])
 
-        // Validate and set data
-        setInventory(Array.isArray(savedInventory) ? savedInventory : defaultInventory)
+        setInventory(Array.isArray(savedInventory) ? savedInventory : [])
         setTransfers(Array.isArray(savedTransfers) ? savedTransfers : [])
         setMovements(Array.isArray(savedMovements) ? savedMovements : [])
         setAlerts(Array.isArray(savedAlerts) ? savedAlerts : [])
@@ -251,8 +161,8 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         setIsDataLoaded(true)
       } catch (error) {
         console.error("❌ Error initializing inventory data:", error)
-        // Fallback to default data
-        setInventory(defaultInventory)
+        // Fallback to empty data
+        setInventory([])
         setIsDataLoaded(true)
       }
     }
@@ -408,7 +318,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
 
   const refreshInventory = () => {
     console.log("🔄 Manually refreshing inventory data...")
-    const savedInventory = safeGet(INVENTORY_STORAGE_KEYS.INVENTORY, defaultInventory)
+    const savedInventory = safeGet(INVENTORY_STORAGE_KEYS.INVENTORY, [])
     const savedTransfers = safeGet(INVENTORY_STORAGE_KEYS.TRANSFERS, [])
     const savedMovements = safeGet(INVENTORY_STORAGE_KEYS.MOVEMENTS, [])
     const savedAlerts = safeGet(INVENTORY_STORAGE_KEYS.ALERTS, [])
@@ -421,7 +331,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
 
   const clearInventoryData = () => {
     console.log("🗑️ Clearing all inventory data...")
-    setInventory(defaultInventory)
+    setInventory([])
     setTransfers([])
     setMovements([])
     setAlerts([])
@@ -435,6 +345,17 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
       }
     })
   }
+
+  const updateItemPrice = (itemId: string, newPrice: number) => {
+    console.log('[updateItemPrice] Updating', itemId, 'to price', newPrice);
+    setInventory((prev) => {
+      const updated = prev.map((item) =>
+        item.id === itemId ? { ...item, unitCost: newPrice } : item
+      );
+      console.log('[updateItemPrice] Updated inventory:', updated);
+      return updated;
+    });
+  };
 
   return (
     <InventoryContext.Provider
@@ -451,6 +372,7 @@ export function InventoryProvider({ children }: { children: React.ReactNode }) {
         getInventorySummary,
         refreshInventory,
         clearInventoryData,
+        updateItemPrice,
       }}
     >
       {children}

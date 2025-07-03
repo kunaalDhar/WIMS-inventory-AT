@@ -60,6 +60,7 @@ import {
 import { OrderPricingPanel } from "@/components/admin/order-pricing-panel"
 import { PermissionRequestsPanel } from "@/components/admin/permission-requests-panel"
 import { EditOrderItemsPanel } from "@/components/admin/edit-order-items-panel"
+import InventoryPanel from "@/components/admin/inventory-panel"
 
 interface SidebarItem {
   id: string
@@ -738,6 +739,8 @@ export function ModernAdminDashboard() {
   const renderInventoryPanel = () => {
     return (
       <div className="space-y-6">
+        {/* Add Item Panel */}
+        <InventoryPanel />
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold text-gray-900">Inventory Management</h2>
@@ -1593,3 +1596,5 @@ export function ModernAdminDashboard() {
     </div>
   )
 }
+
+export default ModernAdminDashboard;

@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, Suspense, lazy } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { ModernAdminDashboard } from "@/components/admin/modern-admin-dashboard"
+
+const LazyAdminDashboard = lazy(() => import("@/components/admin/modern-admin-dashboard"))
 
 export default function AdminDashboard() {
   const { user, isAuthenticated } = useAuth()
@@ -23,8 +24,7 @@ export default function AdminDashboard() {
     }
   }, [isAuthenticated, user, router])
 
-  // Show loading state during initial load
-  if (isAuthenticated === undefined || user === undefined) {
+  if (isAuthenticated === undefined || user === undefined || user?.role !== 'admin') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -53,5 +53,9 @@ export default function AdminDashboard() {
     )
   }
 
-  return <ModernAdminDashboard />
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div><p>Loading dashboard...</p></div>}>
+      <LazyAdminDashboard />
+    </Suspense>
+  )
 }

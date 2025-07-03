@@ -27,7 +27,7 @@ export default function HomePage() {
             Streamline your warehouse operations with our comprehensive inventory and sales management platform.
           </p>
         </div>
-
+        
         {/* Explore More Section */}
         <Card className="mx-auto max-w-xl p-10 rounded-3xl shadow-2xl bg-white/90 backdrop-blur-md flex flex-col items-center mb-16 border-0 hover:shadow-3xl transition-all duration-300">
           <h2 className="text-3xl font-bold text-gray-900 mb-4 text-center">Explore More</h2>

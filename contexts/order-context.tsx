@@ -2,21 +2,16 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
+import { useInventory } from "@/contexts/inventory-context"
 
 export interface OrderItem {
   id: string
   name: string
   category: string
   volume: string
-  bottlesPerCase: number
   requestedQuantity: number
   unit: string
   description?: string
-  salesmanPrice?: number
-  adminPrice?: number
-  finalPrice?: number
-  gstBill?: "yes" | "no"
-  gstNumber?: string
   unitPrice?: number
   lineTotal?: number
 }
@@ -82,31 +77,6 @@ export interface Order {
   approvedAt?: string
   adminNotes?: string
   salesmanAdjustmentNotes?: string
-  allowPriceAdjustment?: boolean
-  priceAdjustmentRange?: { min: number; max: number }
-  salesmanPricing?: {
-    subtotal: number
-    tax: number
-    total: number
-    itemPrices: Record<string, number>
-    withGst: boolean
-    priceAdjustments?: Record<string, number>
-  }
-  adminPricing?: {
-    subtotal: number
-    tax: number
-    total: number
-    itemPrices: Record<string, number>
-  }
-  finalPricing?: {
-    subtotal: number
-    tax: number
-    total: number
-    itemPrices: Record<string, number>
-    adjustments: Record<string, number>
-  }
-  billGenerated?: boolean
-  billId?: string
   withGst?: boolean
   gstNumber?: string
   isEditable?: boolean
@@ -172,7 +142,6 @@ interface OrderContextType {
   retentionInfo: DataRetentionInfo
   addOrder: (order: Omit<Order, "id" | "createdAt" | "orderNumber">) => void
   updateOrder: (orderId: string, updates: Partial<Order>) => void
-  adjustOrderPricing: (orderId: string, priceAdjustments: Record<string, number>) => void
   addClient: (client: Omit<Client, "id" | "createdAt">) => void
   updateClient: (clientId: string, updates: Partial<Client>) => void
   deleteClient: (clientId: string) => void
@@ -181,13 +150,6 @@ interface OrderContextType {
   getClientOrderHistory: (clientId: string) => Order[]
   generateBill: (orderId: string, billType: "regular" | "gst", gstNumber?: string) => Bill | null
   updateBillStatus: (billId: string, status: Bill["status"], adminNotes?: string) => void
-  setAdminPricing: (
-    orderId: string,
-    pricing: Order["adminPricing"],
-    adminNotes?: string,
-    allowAdjustment?: boolean,
-  ) => void
-  setSalesmanAdjustment: (orderId: string, adjustments: Record<string, number>, notes?: string) => void
   updateOrderStatus: (orderId: string, status: Order["status"]) => void
   approveOrder: (orderId: string) => void
   rejectOrder: (orderId: string, reason: string) => void
@@ -569,63 +531,83 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     nextCleanupDate: new Date(Date.now() + RETENTION_POLICY.CLEANUP_CHECK_INTERVAL).toISOString(),
   })
 
-  const [availableItems] = useState<OrderItem[]>([
+  const { inventory } = useInventory();
+  const availableItems: OrderItem[] = inventory.map((item) => ({
+    id: item.id || '',
+    name: item.name || '',
+    category: item.category || '',
+    volume: item.volume || '',
+    bottlesPerCase: 0,
+    requestedQuantity: 0,
+    unit: 'cases',
+    description: `${item.name || ''} - ${item.volume || ''}`,
+    unitPrice: typeof item.unitCost === 'number' ? item.unitCost : 0,
+    lineTotal: 0,
+  }));
+
+  // Demo/hardcoded clients to migrate if missing
+  const demoClients = [
     {
-      id: "1",
-      name: "Litchi",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      requestedQuantity: 0,
-      unit: "cases",
-      description: "Litchi flavored juice - 160ml bottles, 40 bottles per case",
-      unitPrice: 320,
+      partyName: "Aashirwad Karyana Store",
+      clientName: "Aashirwad Karyana Store",
+      address: "Shop No. 12, Daria Market",
+      city: "Chandigarh",
+      area: "Daria",
+      contactPerson: "Rajesh Kumar",
+      contactNumber: "9876543210",
+      gstNumber: "03ABCDE1234F1Z5",
+      email: "aashirwad@gmail.com",
+      createdBy: "system",
     },
     {
-      id: "2",
-      name: "Mango",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      requestedQuantity: 0,
-      unit: "cases",
-      description: "Mango flavored juice - 160ml bottles, 40 bottles per case",
-      unitPrice: 340,
+      partyName: "Aggarwal Grocers",
+      clientName: "Aggarwal Grocers",
+      address: "#1263, Sector 56, Chandigarh",
+      city: "Chandigarh",
+      area: "Sector 56",
+      contactPerson: "Vikram Aggarwal",
+      contactNumber: "9988776655",
+      gstNumber: "03FGHIJ5678K2A6",
+      email: "aggarwal.grocers@gmail.com",
+      createdBy: "system",
     },
     {
-      id: "3",
-      name: "Guava",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      requestedQuantity: 0,
-      unit: "cases",
-      description: "Guava flavored juice - 160ml bottles, 40 bottles per case",
-      unitPrice: 330,
+      partyName: "Bhatia General Store",
+      clientName: "Bhatia General Store",
+      address: "House No. 567, Bhaskar Colony",
+      city: "Chandigarh",
+      area: "Bhaskar Colony",
+      contactPerson: "Meera Bhatia",
+      contactNumber: "9876543211",
+      gstNumber: "03LMNOP9012L3B7",
+      email: "bhatia.store@gmail.com",
+      createdBy: "system",
     },
     {
-      id: "4",
-      name: "Mix Fruit",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      requestedQuantity: 0,
-      unit: "cases",
-      description: "Mixed fruit flavored juice - 160ml bottles, 40 bottles per case",
-      unitPrice: 350,
+      partyName: "Chandigarh Super Market",
+      clientName: "Chandigarh Super Market",
+      address: "SCO 45, Sector 22, Chandigarh",
+      city: "Chandigarh",
+      area: "Sector 22",
+      contactPerson: "Ravi Gupta",
+      contactNumber: "9988776656",
+      gstNumber: "03QRSTU3456M4C8",
+      email: "supermarket.chd@gmail.com",
+      createdBy: "system",
     },
     {
-      id: "5",
-      name: "Orange",
-      category: "Fruit Juice",
-      volume: "160 ml",
-      bottlesPerCase: 40,
-      requestedQuantity: 0,
-      unit: "cases",
-      description: "Orange flavored juice - 160ml bottles, 40 bottles per case",
-      unitPrice: 335,
+      partyName: "Daria Provision Store",
+      clientName: "Daria Provision Store",
+      address: "Shop No. 89, Daria Market",
+      city: "Chandigarh",
+      area: "Daria",
+      contactPerson: "Kavita Jain",
+      contactNumber: "9876543212",
+      gstNumber: "03VWXYZ7890N5D9",
+      email: "daria.provision@gmail.com",
+      createdBy: "system",
     },
-  ])
+  ]
 
   // Initialize data with enhanced recovery mechanisms
   useEffect(() => {
@@ -884,6 +866,17 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(retentionInterval)
   }, [isDataLoaded, orders])
 
+  useEffect(() => {
+    if (isDataLoaded) {
+      // Migrate demo clients if missing
+      demoClients.forEach((demo) => {
+        if (!clients.some((c) => c.partyName === demo.partyName)) {
+          addClient(demo)
+        }
+      })
+    }
+  }, [isDataLoaded])
+
   // Check if client already exists (prevent duplicates)
   const checkClientExists = (partyName: string, email?: string): Client | null => {
     const trimmedPartyName = partyName.trim().toLowerCase()
@@ -913,14 +906,14 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
-  const generateAutomaticBill = (order: Order): Bill | null => {
-    const currentPricing = order.salesmanPricing
-    if (!currentPricing) {
-      console.error("No pricing available for automatic bill generation:", order.id)
-      return null
-    }
+  const generateBill = (orderId: string, billType: "regular" | "gst", gstNumber?: string): Bill | null => {
+    const order = orders.find((o) => o.id === orderId)
+    if (!order) return null
 
-    const billType = order.withGst ? "gst" : "regular"
+    // Calculate subtotal, tax, and total using only unitPrice from order items
+    const subtotal = order.items.reduce((sum, item) => sum + (item.unitPrice || 0) * (item.requestedQuantity || 0), 0)
+    const tax = order.withGst ? subtotal * 0.12 : 0
+    const total = subtotal + tax
 
     const newBill: Bill = {
       id: `BILL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -931,20 +924,50 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       clientId: order.clientId,
       clientName: order.clientName,
       items: order.items,
-      subtotal: currentPricing.subtotal,
-      tax: currentPricing.tax,
-      total: currentPricing.total,
+      subtotal,
+      tax,
+      total,
       billType,
-      gstNumber: order.withGst ? order.gstNumber : undefined,
+      gstNumber: order.withGst ? gstNumber : undefined,
       status: "generated",
       generatedAt: new Date().toISOString(),
       createdBy: "salesman",
     }
 
-    console.log("📄 Auto-generating bill:", newBill.id, "for order:", order.id)
     setBills((prev) => [...prev, newBill])
-
     return newBill
+  }
+
+  const getOrderPricingSummary = () => {
+    const totalOrders = orders.length
+    const totalValue = orders.reduce((sum, order) => {
+      const subtotal = order.items.reduce((s, item) => s + (item.unitPrice || 0) * (item.requestedQuantity || 0), 0)
+      const tax = order.withGst ? subtotal * 0.12 : 0
+      const total = subtotal + tax
+      return sum + total
+    }, 0)
+    const pendingOrders = orders.filter((order) => order.status === "pending")
+    const pendingValue = pendingOrders.reduce((sum, order) => {
+      const subtotal = order.items.reduce((s, item) => s + (item.unitPrice || 0) * (item.requestedQuantity || 0), 0)
+      const tax = order.withGst ? subtotal * 0.12 : 0
+      const total = subtotal + tax
+      return sum + total
+    }, 0)
+    const approvedOrders = orders.filter((order) => order.status === "approved")
+    const approvedValue = approvedOrders.reduce((sum, order) => {
+      const subtotal = order.items.reduce((s, item) => s + (item.unitPrice || 0) * (item.requestedQuantity || 0), 0)
+      const tax = order.withGst ? subtotal * 0.12 : 0
+      const total = subtotal + tax
+      return sum + total
+    }, 0)
+    const averageOrderValue = totalOrders > 0 ? totalValue / totalOrders : 0
+    return {
+      totalOrders,
+      totalValue,
+      pendingValue,
+      approvedValue,
+      averageOrderValue,
+    }
   }
 
   const addOrder = (orderData: Omit<Order, "id" | "createdAt" | "orderNumber">) => {
@@ -959,8 +982,8 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
       createdAt: timestamp,
       status: "pending",
       isEditable: true,
-      allowPriceAdjustment: true,
-      priceAdjustmentRange: { min: 10, max: 15 },
+      withGst: orderData.withGst !== false,
+      gstNumber: orderData.withGst ? orderData.gstNumber : undefined,
       dataVersion: "v8",
       lastModified: timestamp,
       backupTimestamp: timestamp,
@@ -1002,7 +1025,7 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     setOrderCounter((prev) => prev + 1)
 
     // Auto-generate bill and save immediately
-    const generatedBill = generateAutomaticBill(newOrder)
+    const generatedBill = generateBill(newOrder.id, newOrder.withGst ? "gst" : "regular", newOrder.gstNumber)
     if (generatedBill) {
       setOrders((prev) => {
         const updatedWithBill = prev.map((o) =>
@@ -1071,55 +1094,6 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
             }
           : order,
       ),
-    )
-  }
-
-  const adjustOrderPricing = (orderId: string, priceAdjustments: Record<string, number>) => {
-    console.log("🔧 Adjusting order pricing:", orderId)
-    const timestamp = new Date().toISOString()
-
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.id !== orderId || !order.salesmanPricing) {
-          return order
-        }
-
-        // Calculate new pricing with adjustments
-        const adjustedItemPrices: Record<string, number> = {}
-        let adjustedSubtotal = 0
-
-        order.items.forEach((item) => {
-          const basePrice = order.salesmanPricing!.itemPrices[item.id] || 0
-          const adjustment = priceAdjustments[item.id] || 0
-          const finalPrice = basePrice + adjustment
-          adjustedItemPrices[item.id] = finalPrice
-          adjustedSubtotal += finalPrice * item.requestedQuantity
-        })
-
-        const taxRate = order.withGst ? 0.12 : 0
-        const adjustedTax = adjustedSubtotal * taxRate
-        const adjustedTotal = adjustedSubtotal + adjustedTax
-
-        const updatedPricing = {
-          ...order.salesmanPricing,
-          subtotal: adjustedSubtotal,
-          tax: adjustedTax,
-          total: adjustedTotal,
-          itemPrices: adjustedItemPrices,
-          priceAdjustments,
-        }
-
-        return {
-          ...order,
-          salesmanPricing: updatedPricing,
-          items: order.items.map((item) => ({
-            ...item,
-            unitPrice: adjustedItemPrices[item.id],
-            lineTotal: adjustedItemPrices[item.id] * item.requestedQuantity,
-          })),
-          lastModified: timestamp,
-        }
-      }),
     )
   }
 
@@ -1193,58 +1167,6 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
     setClients((prev) => prev.filter((client) => client.id !== clientId))
   }
 
-  const generateBill = (orderId: string, billType: "regular" | "gst", gstNumber?: string): Bill | null => {
-    const order = orders.find((o) => o.id === orderId)
-    if (!order) {
-      console.error("Order not found for bill generation:", orderId)
-      return null
-    }
-
-    const currentPricing = order.finalPricing || order.adminPricing || order.salesmanPricing
-    if (!currentPricing) {
-      console.error("No pricing available for order:", orderId)
-      return null
-    }
-
-    const newBill: Bill = {
-      id: `BILL-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      orderId: order.id,
-      orderNumber: order.orderNumber || "",
-      salesmanId: order.salesmanId,
-      salesmanName: order.salesmanName,
-      clientId: order.clientId,
-      clientName: order.clientName,
-      items: order.items,
-      subtotal: currentPricing.subtotal,
-      tax: currentPricing.tax,
-      total: currentPricing.total,
-      billType,
-      gstNumber: billType === "gst" ? gstNumber : undefined,
-      status: "generated",
-      generatedAt: new Date().toISOString(),
-      createdBy: "salesman",
-    }
-
-    console.log("📄 Generating bill:", newBill.id, "for order:", orderId)
-    setBills((prev) => [...prev, newBill])
-
-    // Update order to mark bill as generated
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              billGenerated: true,
-              billId: newBill.id,
-              lastModified: new Date().toISOString(),
-            }
-          : o,
-      ),
-    )
-
-    return newBill
-  }
-
   const updateBillStatus = (billId: string, status: Bill["status"], adminNotes?: string) => {
     console.log("📝 Updating bill status:", billId, "to", status)
     setBills((prev) =>
@@ -1261,89 +1183,6 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
           return updatedBill
         }
         return bill
-      }),
-    )
-  }
-
-  const setAdminPricing = (
-    orderId: string,
-    pricing: Order["adminPricing"],
-    adminNotes?: string,
-    allowAdjustment?: boolean,
-  ) => {
-    console.log("💰 Setting admin pricing for order:", orderId)
-    const timestamp = new Date().toISOString()
-
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              adminPricing: pricing,
-              adminNotes,
-              allowPriceAdjustment: allowAdjustment || false,
-              priceAdjustmentRange: allowAdjustment ? { min: 10, max: 15 } : undefined,
-              status: "admin_priced" as const,
-              adminPricedAt: timestamp,
-              lastModified: timestamp,
-              // Update items with admin prices
-              items: order.items.map((item) => ({
-                ...item,
-                adminPrice: pricing?.itemPrices?.[item.id] || 0,
-                finalPrice: pricing?.itemPrices?.[item.id] || 0,
-              })),
-            }
-          : order,
-      ),
-    )
-  }
-
-  const setSalesmanAdjustment = (orderId: string, adjustments: Record<string, number>, notes?: string) => {
-    console.log("🔧 Setting salesman adjustment for order:", orderId)
-    const timestamp = new Date().toISOString()
-
-    setOrders((prev) =>
-      prev.map((order) => {
-        if (order.id !== orderId || !order.allowPriceAdjustment || !order.adminPricing) {
-          return order
-        }
-
-        // Calculate new pricing with adjustments
-        const adjustedItemPrices: Record<string, number> = {}
-        let adjustedSubtotal = 0
-
-        order.items.forEach((item) => {
-          const adminPrice = order.adminPricing!.itemPrices[item.id] || 0
-          const adjustment = adjustments[item.id] || 0
-          const finalPrice = adminPrice + adjustment
-          adjustedItemPrices[item.id] = finalPrice
-          adjustedSubtotal += finalPrice * item.requestedQuantity
-        })
-
-        const adjustedTax = adjustedSubtotal * 0.1
-        const adjustedTotal = adjustedSubtotal + adjustedTax
-
-        const finalPricing = {
-          subtotal: adjustedSubtotal,
-          tax: adjustedTax,
-          total: adjustedTotal,
-          itemPrices: adjustedItemPrices,
-          adjustments,
-        }
-
-        return {
-          ...order,
-          finalPricing,
-          salesmanAdjustmentNotes: notes,
-          status: "salesman_adjusted" as const,
-          salesmanAdjustedAt: timestamp,
-          lastModified: timestamp,
-          // Update items with final prices
-          items: order.items.map((item) => ({
-            ...item,
-            finalPrice: adjustedItemPrices[item.id],
-          })),
-        }
       }),
     )
   }
@@ -1389,36 +1228,6 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
           : order,
       ),
     )
-  }
-
-  const getOrderPricingSummary = () => {
-    const totalOrders = orders.length
-    const totalValue = orders.reduce((sum, order) => {
-      const pricing = order.finalPricing || order.adminPricing || order.salesmanPricing
-      return sum + (pricing?.total || 0)
-    }, 0)
-
-    const pendingOrders = orders.filter((order) => order.status === "pending")
-    const pendingValue = pendingOrders.reduce((sum, order) => {
-      const pricing = order.salesmanPricing
-      return sum + (pricing?.total || 0)
-    }, 0)
-
-    const approvedOrders = orders.filter((order) => order.status === "approved")
-    const approvedValue = approvedOrders.reduce((sum, order) => {
-      const pricing = order.finalPricing || order.adminPricing
-      return sum + (pricing?.total || 0)
-    }, 0)
-
-    const averageOrderValue = totalOrders > 0 ? totalValue / totalOrders : 0
-
-    return {
-      totalOrders,
-      totalValue,
-      pendingValue,
-      approvedValue,
-      averageOrderValue,
-    }
   }
 
   const refreshData = () => {
@@ -1604,9 +1413,9 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         isDataLoaded,
         orderCounter,
         dataIntegrity,
+        retentionInfo,
         addOrder,
         updateOrder,
-        adjustOrderPricing,
         addClient,
         updateClient,
         deleteClient,
@@ -1615,18 +1424,15 @@ export function OrderProvider({ children }: { children: React.ReactNode }) {
         getClientOrderHistory,
         generateBill,
         updateBillStatus,
-        setAdminPricing,
-        setSalesmanAdjustment,
         updateOrderStatus,
         approveOrder,
         rejectOrder,
-        getOrderPricingSummary,
+        getOrderPricingSummary: getOrderPricingSummary,
         refreshData,
         clearAllData,
         exportBackup,
         createManualBackup,
         verifyDataIntegrity,
-        retentionInfo,
         getOrderRetentionStatus,
         getOrdersNearExpiry,
         getArchivedOrders,

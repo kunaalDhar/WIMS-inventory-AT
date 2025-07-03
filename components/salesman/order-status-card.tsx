@@ -215,7 +215,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                 <td>${item.name}</td>
                 <td>${item.volume}</td>
                 <td>${item.requestedQuantity}</td>
-                <td class="currency">₹${(order.adminPricing?.itemPrices[item.id] || 0).toFixed(2)}</td>
+                <td class="currency">₹${item.unitPrice.toFixed(2)}</td>
                 ${
                   order.finalPricing
                     ? `
@@ -224,7 +224,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                 `
                     : ""
                 }
-                <td class="currency">₹${((order.finalPricing?.itemPrices[item.id] || order.adminPricing?.itemPrices[item.id] || 0) * item.requestedQuantity).toFixed(2)}</td>
+                <td class="currency">₹${(item.unitPrice * item.requestedQuantity).toFixed(2)}</td>
               </tr>
             `,
               )
@@ -391,9 +391,8 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                   </thead>
                   <tbody>
                     {order.items.map((item) => {
-                      const adminPrice = order.adminPricing?.itemPrices[item.id] || 0
                       const adjustment = adjustments[item.id] || 0
-                      const finalPrice = adminPrice + adjustment
+                      const finalPrice = item.unitPrice + adjustment
                       const lineTotal = finalPrice * item.requestedQuantity
 
                       return (
@@ -405,7 +404,7 @@ export function OrderStatusCard({ order }: OrderStatusCardProps) {
                             </div>
                           </td>
                           <td className="p-3">{item.requestedQuantity}</td>
-                          <td className="p-3">₹{adminPrice.toFixed(2)}</td>
+                          <td className="p-3">₹{item.unitPrice.toFixed(2)}</td>
                           <td className="p-3">
                             <div className="flex items-center space-x-1">
                               <span>₹</span>

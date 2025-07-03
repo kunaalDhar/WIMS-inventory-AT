@@ -1,21 +1,22 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, Suspense, lazy } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { SalesmanDashboardContent } from "@/components/salesman/salesman-dashboard-content"
+
+const LazySalesmanDashboardContent = lazy(() => import("@/components/salesman/salesman-dashboard-content"))
 
 export default function SalesmanDashboard() {
   const { user, isAuthenticated } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
-    if (!isAuthenticated || !user || user.role !== "salesman") {
+    if (!isAuthenticated || !user || user.role !== 'salesman') {
       router.push("/salesman/login")
     }
   }, [isAuthenticated, user, router])
 
-  if (!isAuthenticated || !user) {
+  if (!isAuthenticated || !user || user.role !== 'salesman') {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -26,22 +27,9 @@ export default function SalesmanDashboard() {
     )
   }
 
-  if (user.role !== "salesman") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Access Denied</h1>
-          <p className="text-gray-600 mb-4">You don't have permission to access this page.</p>
-          <button
-            onClick={() => router.push("/salesman/login")}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Go to Login
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  return <SalesmanDashboardContent />
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div><p>Loading dashboard...</p></div>}>
+      <LazySalesmanDashboardContent />
+    </Suspense>
+  )
 }

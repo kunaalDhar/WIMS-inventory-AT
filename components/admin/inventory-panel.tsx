@@ -21,6 +21,8 @@ import {
 } from "@mui/material"
 import { styled } from "@mui/material/styles"
 import { DataGrid, type GridColDef } from "@mui/x-data-grid"
+import { useInventory } from "@/contexts/inventory-context"
+import type { InventoryItem } from "@/contexts/inventory-context"
 
 // Styled Components for better UI
 const StyledPaper = styled(Paper)(({ theme }) => ({
@@ -37,81 +39,51 @@ const StyledTableCell = styled(TableCell)(({ theme }) => ({
   fontWeight: "bold",
 }))
 
-interface InventoryItem {
-  id: number
-  name: string
-  description: string
-  quantity: number
-  unitPrice: number
-  supplier: string
-  category: string
-  client: string
-}
-
 const InventoryPanel = () => {
-  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const { inventory, isDataLoaded, refreshInventory } = useInventory();
   const [open, setOpen] = useState(false)
   const [formData, setFormData] = useState<InventoryItem>({
-    id: 0,
-    name: "",
-    description: "",
-    quantity: 0,
-    unitPrice: 0,
-    supplier: "",
-    category: "",
-    client: "",
+    id: '',
+    name: '',
+    category: '',
+    volume: '',
+    bottlesPerCase: 0,
+    currentStock: 0,
+    minStock: 0,
+    maxStock: 0,
+    status: 'in-stock',
+    lastUpdated: '',
+    location: '',
+    supplier: '',
+    unitCost: 0,
+    totalValue: 0,
+    reorderPoint: 0,
+    minPrice: 0,
+    maxPrice: 0,
   })
   const [editMode, setEditMode] = useState(false)
-  const [selectedItemId, setSelectedItemId] = useState<number | null>(null)
-
-  useEffect(() => {
-    // Mock data for demonstration
-    const mockInventory: InventoryItem[] = [
-      {
-        id: 1,
-        name: "Product A",
-        description: "Description A",
-        quantity: 100,
-        unitPrice: 25,
-        supplier: "Supplier X",
-        category: "Electronics",
-        client: "Client Alpha",
-      },
-      {
-        id: 2,
-        name: "Product B",
-        description: "Description B",
-        quantity: 50,
-        unitPrice: 50,
-        supplier: "Supplier Y",
-        category: "Clothing",
-        client: "Client Beta",
-      },
-      {
-        id: 3,
-        name: "Product C",
-        description: "Description C",
-        quantity: 75,
-        unitPrice: 75,
-        supplier: "Supplier Z",
-        category: "Home Goods",
-        client: "Client Gamma",
-      },
-    ]
-    setInventory(mockInventory)
-  }, [])
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
 
   const handleClickOpen = () => {
     setOpen(true)
     setFormData({
-      id: 0,
-      name: "",
-      description: "",
-      quantity: 0,
-      unitPrice: 0,
-      supplier: "",
-      category: "",
-      client: "",
+      id: '',
+      name: '',
+      category: '',
+      volume: '',
+      bottlesPerCase: 0,
+      currentStock: 0,
+      minStock: 0,
+      maxStock: 0,
+      status: 'in-stock',
+      lastUpdated: '',
+      location: '',
+      supplier: '',
+      unitCost: 0,
+      totalValue: 0,
+      reorderPoint: 0,
+      minPrice: 0,
+      maxPrice: 0,
     })
     setEditMode(false)
   }
@@ -130,22 +102,31 @@ const InventoryPanel = () => {
   }
 
   const handleSubmit = () => {
-    if (editMode && selectedItemId !== null) {
-      // Update existing item
-      const updatedInventory = inventory.map((item) =>
-        item.id === selectedItemId ? { ...formData, id: selectedItemId } : item,
+    const now = new Date().toISOString();
+    if (editMode && selectedItemId) {
+      // Edit existing item
+      const updated = inventory.map((item) =>
+        item.id === selectedItemId ? { ...formData, lastUpdated: now } : item
       )
-      setInventory(updatedInventory)
+      localStorage.setItem('wims-inventory-v2', JSON.stringify(updated))
     } else {
       // Add new item
-      const newItem = { ...formData, id: inventory.length > 0 ? Math.max(...inventory.map((item) => item.id)) + 1 : 1 }
-      setInventory([...inventory, newItem])
+      const newItem = {
+        ...formData,
+        id: `item-${Date.now()}`,
+        lastUpdated: now,
+      }
+      localStorage.setItem('wims-inventory-v2', JSON.stringify([...inventory, newItem]))
     }
-
-    handleClose()
+    setOpen(false)
+    if (typeof refreshInventory === 'function') {
+      refreshInventory();
+    } else {
+      // TODO: Implement refreshInventory in useInventory to update context after changes
+    }
   }
 
-  const handleEdit = (id: number) => {
+  const handleEdit = (id: string) => {
     const itemToEdit = inventory.find((item) => item.id === id)
     if (itemToEdit) {
       setFormData(itemToEdit)
@@ -155,24 +136,31 @@ const InventoryPanel = () => {
     }
   }
 
-  const handleDelete = (id: number) => {
-    const updatedInventory = inventory.filter((item) => item.id !== id)
-    setInventory(updatedInventory)
+  const handleDelete = (id: string) => {
+    const updated = inventory.filter((item) => item.id !== id)
+    localStorage.setItem('wims-inventory-v2', JSON.stringify(updated))
+    if (typeof refreshInventory === 'function') {
+      refreshInventory();
+    } else {
+      // TODO: Implement refreshInventory in useInventory to update context after changes
+    }
   }
 
   const columns: GridColDef[] = [
-    { field: "id", headerName: "ID", width: 70 },
-    { field: "name", headerName: "Name", width: 150 },
-    { field: "description", headerName: "Description", width: 200 },
-    { field: "quantity", headerName: "Quantity", width: 100 },
-    { field: "unitPrice", headerName: "Unit Price", width: 100 },
-    { field: "supplier", headerName: "Supplier", width: 150 },
-    { field: "category", headerName: "Category", width: 150 },
-    { field: "client", headerName: "Client", width: 150 },
+    { field: 'id', headerName: 'ID', width: 120 },
+    { field: 'name', headerName: 'Name', width: 150 },
+    { field: 'category', headerName: 'Category', width: 120 },
+    { field: 'volume', headerName: 'Volume', width: 100 },
+    { field: 'bottlesPerCase', headerName: 'Bottles/Case', width: 120 },
+    { field: 'currentStock', headerName: 'Stock', width: 100 },
+    { field: 'unitCost', headerName: 'Unit Cost', width: 100 },
+    { field: 'totalValue', headerName: 'Total Value', width: 120 },
+    { field: 'supplier', headerName: 'Supplier', width: 120 },
+    { field: 'status', headerName: 'Status', width: 100 },
     {
-      field: "actions",
-      headerName: "Actions",
-      width: 200,
+      field: 'actions',
+      headerName: 'Actions',
+      width: 180,
       renderCell: (params) => (
         <div>
           <Button size="small" color="primary" onClick={() => handleEdit(params.row.id)}>
@@ -228,39 +216,143 @@ const InventoryPanel = () => {
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
-                id="description"
-                name="description"
-                label="Description"
+                id="category"
+                name="category"
+                label="Category"
                 type="text"
                 fullWidth
                 variant="outlined"
-                value={formData.description}
+                value={formData.category}
                 onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
-                id="quantity"
-                name="quantity"
-                label="Quantity (Units)"
-                type="number"
+                id="volume"
+                name="volume"
+                label="Volume"
+                type="text"
                 fullWidth
                 variant="outlined"
-                value={formData.quantity}
+                value={formData.volume}
                 onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
-                id="unitPrice"
-                name="unitPrice"
-                label="Unit Price"
+                id="bottlesPerCase"
+                name="bottlesPerCase"
+                label="Bottles/Case"
                 type="number"
                 fullWidth
                 variant="outlined"
-                value={formData.unitPrice}
+                value={formData.bottlesPerCase}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="currentStock"
+                name="currentStock"
+                label="Current Stock"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.currentStock}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="minStock"
+                name="minStock"
+                label="Min Stock"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.minStock}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="maxStock"
+                name="maxStock"
+                label="Max Stock"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.maxStock}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="status"
+                name="status"
+                label="Status"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={formData.status}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="unitCost"
+                name="unitCost"
+                label="Unit Cost"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.unitCost}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="totalValue"
+                name="totalValue"
+                label="Total Value"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.totalValue}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="reorderPoint"
+                name="reorderPoint"
+                label="Reorder Point"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.reorderPoint}
+                onChange={handleInputChange}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                margin="dense"
+                id="location"
+                name="location"
+                label="Location"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={formData.location}
                 onChange={handleInputChange}
               />
             </Grid>
@@ -273,40 +365,33 @@ const InventoryPanel = () => {
                 type="text"
                 fullWidth
                 variant="outlined"
-                placeholder="Enter supplier name"
                 value={formData.supplier}
                 onChange={handleInputChange}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth margin="dense">
-                <InputLabel id="category-label">Category</InputLabel>
-                <Select
-                  labelId="category-label"
-                  id="category"
-                  name="category"
-                  value={formData.category}
-                  label="Category"
-                  onChange={(e) => handleSelectChange(e, "category")}
-                >
-                  <MenuItem value="Electronics">Electronics</MenuItem>
-                  <MenuItem value="Clothing">Clothing</MenuItem>
-                  <MenuItem value="Home Goods">Home Goods</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                margin="dense"
+                id="minPrice"
+                name="minPrice"
+                label="Min Price (optional)"
+                type="number"
+                fullWidth
+                variant="outlined"
+                value={formData.minPrice ?? ''}
+                onChange={handleInputChange}
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
               <TextField
                 margin="dense"
-                id="client"
-                name="client"
-                label="Client"
-                type="text"
+                id="maxPrice"
+                name="maxPrice"
+                label="Max Price (optional)"
+                type="number"
                 fullWidth
                 variant="outlined"
-                placeholder="Enter client name"
-                value={formData.client}
+                value={formData.maxPrice ?? ''}
                 onChange={handleInputChange}
               />
             </Grid>

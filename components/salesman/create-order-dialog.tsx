@@ -28,7 +28,8 @@ import {
   User,
   Calculator,
 } from "lucide-react"
-import { PriceAdjustmentDialog } from "./price-adjustment-dialog"
+
+type OrderItem = import("@/contexts/order-context").OrderItem;
 
 interface CreateOrderDialogProps {
   open: boolean
@@ -36,22 +37,9 @@ interface CreateOrderDialogProps {
   editOrder?: any
 }
 
-interface OrderItem {
-  id: string
-  name: string
-  category: string
-  volume: string
-  bottlesPerCase: number
-  requestedQuantity: number
-  unit: string
-  description?: string
-  unitPrice?: number
-  lineTotal?: number
-}
-
 export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrderDialogProps) {
   const { user } = useAuth()
-  const { clients, availableItems, addOrder, updateOrder, getClientOrderHistory, orderCounter, adjustOrderPricing } =
+  const { clients, availableItems, addOrder, updateOrder, getClientOrderHistory, orderCounter } =
     useOrders()
   const [selectedClientId, setSelectedClientId] = useState<string>(editOrder?.clientId || "")
   const [selectedItems, setSelectedItems] = useState<OrderItem[]>(editOrder?.items || [])
@@ -60,8 +48,6 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
   const [gstNumber, setGstNumber] = useState(editOrder?.gstNumber || "")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [showPriceAdjustment, setShowPriceAdjustment] = useState(false)
-  const [createdOrder, setCreatedOrder] = useState<any>(null)
 
   const selectedClient = clients.find((client) => client.id === selectedClientId)
   const clientOrderHistory = selectedClient ? getClientOrderHistory(selectedClient.id) : []
@@ -86,18 +72,20 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
     if (existingItem) {
       setSelectedItems((prev) =>
         prev.map((selected) =>
-          selected.id === item.id ? { ...selected, requestedQuantity: selected.requestedQuantity + 1 } : selected,
-        ),
+          selected.id === item.id ? { ...selected, requestedQuantity: selected.requestedQuantity + 1 } : selected
+        )
       )
     } else {
-      const newItem = {
+      const newItem: OrderItem = {
         ...item,
         requestedQuantity: 1,
-        unitPrice: item.unitPrice || 0,
-        lineTotal: (item.unitPrice || 0) * 1,
+        unitPrice: typeof (item as any).unitCost !== 'undefined' ? Number((item as any).unitCost) || 0 : (item.unitPrice || 0),
+        lineTotal: (typeof (item as any).unitCost !== 'undefined' ? Number((item as any).unitCost) || 0 : (item.unitPrice || 0)) * 1,
       }
       setSelectedItems((prev) => [...prev, newItem])
     }
+
+    console.log('[SalesmanOrder] Adding item to order:', item.id, item.name, 'unitPrice:', item.unitPrice)
   }
 
   const handleUpdateQuantity = (itemId: string, quantity: number) => {
@@ -110,48 +98,11 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
             ? {
                 ...item,
                 requestedQuantity: quantity,
-                lineTotal: (item.unitPrice || 0) * quantity,
+                lineTotal: (typeof (item as any).unitCost !== 'undefined' ? Number((item as any).unitCost) || 0 : (item.unitPrice || 0)) * quantity,
               }
-            : item,
-        ),
+            : item
+        )
       )
-    }
-  }
-
-  // Ensure price adjustment is available during order creation and editing
-  // Update the handleUpdateUnitPrice function to enforce price adjustment limits
-  const handleUpdateUnitPrice = (itemId: string, unitPrice: number) => {
-    const item = selectedItems.find((item) => item.id === itemId)
-    if (!item) return
-
-    const originalItem = availableItems.find((i) => i.id === itemId)
-    const basePrice = originalItem?.unitPrice || 0
-
-    // Enforce price adjustment limits (±₹10-15)
-    const minPrice = Math.max(0, basePrice - 15)
-    const maxPrice = basePrice + 15
-    const clampedPrice = Math.max(minPrice, Math.min(maxPrice, unitPrice))
-
-    setSelectedItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId
-          ? {
-              ...item,
-              unitPrice: clampedPrice,
-              lineTotal: clampedPrice * item.requestedQuantity,
-            }
-          : item,
-      ),
-    )
-  }
-
-  // Add a helper function to show price adjustment range
-  const getPriceAdjustmentRange = (itemId: string) => {
-    const originalItem = availableItems.find((i) => i.id === itemId)
-    const basePrice = originalItem?.unitPrice || 0
-    return {
-      min: Math.max(0, basePrice - 15),
-      max: basePrice + 15,
     }
   }
 
@@ -211,7 +162,7 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
     try {
       const itemPrices: Record<string, number> = {}
       selectedItems.forEach((item) => {
-        itemPrices[item.id] = item.unitPrice || 0
+        itemPrices[item.id] = typeof (item as any).unitCost !== 'undefined' ? Number((item as any).unitCost) || 0 : (item.unitPrice || 0)
       })
 
       const salesmanPricing = {
@@ -226,7 +177,7 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
         salesmanId: user.id,
         salesmanName: user.name,
         clientId: selectedClient.id,
-        clientName: selectedClient.name,
+        clientName: selectedClient.name || '',
         items: selectedItems,
         status: "pending" as const,
         totalItems: getTotalItems(),
@@ -245,13 +196,9 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
       } else {
         // Create new order
         const newOrder = addOrder(orderData)
-        setCreatedOrder(newOrder)
-
-        // Show success message briefly, then show price adjustment dialog
         setShowSuccess(true)
         setTimeout(() => {
           setShowSuccess(false)
-          setShowPriceAdjustment(true)
         }, 2000)
       }
 
@@ -421,7 +368,7 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
                           <div className="flex flex-col">
                             <span className="font-medium">{item.name}</span>
                             <span className="text-xs text-muted-foreground">
-                              {item.category} • {item.volume} • ₹{item.unitPrice}/unit
+                              {item.category} • {item.volume} • ₹{typeof (item as any).unitCost !== 'undefined' ? Number((item as any).unitCost) : (item.unitPrice || 0)}/unit
                             </span>
                           </div>
                         </SelectItem>
@@ -496,18 +443,10 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
                                 <Input
                                   type="number"
                                   step="0.01"
-                                  value={item.unitPrice || 0}
-                                  onChange={(e) =>
-                                    handleUpdateUnitPrice(item.id, Number.parseFloat(e.target.value) || 0)
-                                  }
+                                  value={typeof (item as any).unitCost !== 'undefined' ? Number((item as any).unitCost) || 0 : (item.unitPrice || 0)}
                                   className="w-24 mb-1"
-                                  min={getPriceAdjustmentRange(item.id).min}
-                                  max={getPriceAdjustmentRange(item.id).max}
+                                  readOnly
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                  Range: ₹{getPriceAdjustmentRange(item.id).min.toFixed(2)} - ₹
-                                  {getPriceAdjustmentRange(item.id).max.toFixed(2)}
-                                </p>
                               </div>
                             </td>
                             <td className="p-3 font-medium">₹{(item.lineTotal || 0).toFixed(2)}</td>
@@ -634,23 +573,6 @@ export function CreateOrderDialog({ open, onOpenChange, editOrder }: CreateOrder
             </div>
           </form>
         )}
-        {/* Price Adjustment Dialog */}
-        <PriceAdjustmentDialog
-          open={showPriceAdjustment}
-          onOpenChange={(open) => {
-            setShowPriceAdjustment(open)
-            if (!open) {
-              onOpenChange(false)
-              setCreatedOrder(null)
-            }
-          }}
-          order={createdOrder}
-          onAdjustPricing={(adjustments) => {
-            if (createdOrder) {
-              adjustOrderPricing(createdOrder.id, adjustments)
-            }
-          }}
-        />
       </DialogContent>
     </Dialog>
   )

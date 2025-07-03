@@ -38,6 +38,7 @@ import {
 } from "lucide-react"
 import { useRouter } from 'next/navigation'
 import { useAdminPermission } from "@/contexts/admin-permission-context"
+import { useInventory } from "@/contexts/inventory-context"
 
 type Variant = "default" | "secondary" | "destructive" | "outline"
 
@@ -58,6 +59,7 @@ export function SalesmanDashboardContent() {
     verifyDataIntegrity,
   } = useOrders()
   const { requestAdminPermission, getRequestStatus } = useAdminPermission()
+  const { refreshInventory } = useInventory()
 
   // State management
   const [isCreateOrderOpen, setIsCreateOrderOpen] = useState(false)
@@ -106,49 +108,43 @@ export function SalesmanDashboardContent() {
   }, [user?.name, isSpeaking])
 
   // Filter orders for current salesman
-  const salesmanOrders = useMemo(() => {
-    return orders.filter((order) => order.salesmanId === user?.id)
-  }, [orders, user?.id])
+  const salesmanOrders = orders.filter((order) => order.salesmanId === user?.id)
 
   // Filter orders based on search and status
-  const filteredOrders = useMemo(() => {
-    return salesmanOrders.filter((order) => {
-      const matchesSearch =
-        order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.notes.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredOrders = salesmanOrders.filter((order) => {
+    const matchesSearch =
+      order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.notes.toLowerCase().includes(searchTerm.toLowerCase())
 
-      const matchesStatus = statusFilter === "all" || order.status === statusFilter
+    const matchesStatus = statusFilter === "all" || order.status === statusFilter
 
-      return matchesSearch && matchesStatus
-    })
-  }, [salesmanOrders, searchTerm, statusFilter])
+    return matchesSearch && matchesStatus
+  })
 
   // Filter bills for current salesman
-  const salesmanBills = useMemo(() => {
-    return bills.filter((bill) => {
-      const order = orders.find((order) => order.id === bill.orderId)
-      return order?.salesmanId === user?.id
-    })
-  }, [bills, orders, user?.id])
+  const salesmanBills = bills.filter((bill) => {
+    const order = orders.find((order) => order.id === bill.orderId)
+    return order?.salesmanId === user?.id
+  })
 
   // Calculate statistics
-  const stats = useMemo(() => ({
+  const stats = {
     totalOrders: salesmanOrders.length,
     pendingOrders: salesmanOrders.filter((order) => order.status === "pending").length,
     approvedOrders: salesmanOrders.filter((order) => order.status === "approved").length,
     totalClients: clients.length,
     generatedBills: salesmanBills.length,
     pendingBills: salesmanBills.filter((bill) => bill.status === "generated").length,
-  }), [salesmanOrders, clients.length, salesmanBills])
+  }
 
   // Get pricing summary
-  const pricingSummary = useMemo(() => getOrderPricingSummary(), [getOrderPricingSummary])
+  const pricingSummary = getOrderPricingSummary()
 
   // Get recent orders (last 10)
-  const recentOrders = useMemo(() => salesmanOrders
+  const recentOrders = salesmanOrders
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10), [salesmanOrders])
+    .slice(0, 10)
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { variant: Variant, label: string }> = {
@@ -341,7 +337,19 @@ export function SalesmanDashboardContent() {
               <RefreshCw className="w-5 h-5 mr-2" />
               Refresh
             </Button>
-          
+            {/* Refresh Items Button */}
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={() => {
+                localStorage.removeItem('wims-inventory-v2');
+                refreshInventory();
+              }}
+              className="bg-green-600 text-white font-semibold shadow-md border-0 hover:bg-green-700"
+            >
+              <RefreshCw className="w-5 h-5 mr-2" />
+              Refresh Items
+            </Button>
             <Button
               variant="destructive"
               size="lg"
@@ -554,9 +562,6 @@ export function SalesmanDashboardContent() {
                     </TableHeader>
                     <TableBody>
                       {filteredOrders.map((order) => {
-                        const currentPricing = order.finalPricing || order.adminPricing || order.salesmanPricing
-                        const canGenerateBill =
-                          currentPricing && (order.status === "approved" || order.status === "admin_priced")
                         const orderBill = bills.find((bill) => bill.orderId === order.id)
 
                         return (
@@ -595,19 +600,14 @@ export function SalesmanDashboardContent() {
                               </div>
                             </TableCell>
                             <TableCell>
-                              {currentPricing ? (
+                              {order.withGst ? (
                                 <div className="text-green-400">
-                                  <p className="font-bold">{formatCurrency(currentPricing.total)}</p>
-                                  <p className="text-xs text-blue-400">Tax: {formatCurrency(currentPricing.tax)}</p>
+                                  <p className="font-bold">{formatCurrency(order.withGst ? order.gstValue : 0)}</p>
+                                  <p className="text-xs text-blue-400">Tax: {formatCurrency(order.gstValue)}</p>
                                 </div>
                               ) : (
-                                <span className="text-blue-400">Pending</span>
+                                <span className="text-blue-400">No GST</span>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={order.withGst ? "default" : "outline"}>
-                                {order.withGst ? "With GST" : "No GST"}
-                              </Badge>
                             </TableCell>
                             <TableCell>
                               {orderBill ? (
@@ -660,29 +660,16 @@ export function SalesmanDashboardContent() {
                                     <FileText className="w-4 h-4" />
                                   </Button>
                                 )}
-                                {canGenerateBill && !orderBill && (
-                                  <>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleGenerateBill(order, "regular")}
-                                      className="text-blue-400 hover:text-blue-200 h-8 w-8 p-0"
-                                      title="Generate Regular Bill"
-                                    >
-                                      <Download className="w-4 h-4" />
-                                    </Button>
-                                    {order.withGst && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleGenerateBill(order, "gst")}
-                                        className="text-blue-400 hover:text-blue-200 h-8 w-8 p-0"
-                                        title="Generate GST Bill"
-                                      >
-                                        <Receipt className="w-4 h-4" />
-                                      </Button>
-                                    )}
-                                  </>
+                                {order.withGst && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleGenerateBill(order, "gst")}
+                                    className="text-blue-400 hover:text-blue-200 h-8 w-8 p-0"
+                                    title="Generate GST Bill"
+                                  >
+                                    <Receipt className="w-4 h-4" />
+                                  </Button>
                                 )}
                               </div>
                             </TableCell>
@@ -775,3 +762,5 @@ export function SalesmanDashboardContent() {
     </div>
   )
 }
+
+export default SalesmanDashboardContent;
